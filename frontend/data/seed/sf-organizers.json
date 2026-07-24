@@ -1,0 +1,14 @@
+// Organizer[] — ver frontend/lib/contracts/growxth.ts (interface Organizer).
+// SOLO roles públicos. NUNCA devs individuales / datos privados.
+// Cargá los organizadores reales de SF a mano dentro del array de abajo.
+// Forma de cada item:
+// {
+//   "id": "org-...",                     // único dentro de este archivo
+//   "displayName": "SF Python Organizers",
+//   "publicRole": "Meetup host",
+//   "publicContactUrl": "https://..." | null,
+//   "organizesEventIds": ["evt-..."],    // deben existir en sf-events.json
+//   "communityIds": ["com-..."],         // deben existir en sf-communities.json
+//   "evidenceIds": ["ev-..."]
+// }
+[]
