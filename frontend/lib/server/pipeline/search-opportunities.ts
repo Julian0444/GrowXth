@@ -1,10 +1,13 @@
-// Pipeline de búsqueda (T2). Orquesta grafo semilla + scorers puros + ROI y
-// arma el SearchResponse. Presupuesto total 8s con degradación parcial: si un
-// paso se pasa del deadline, se salta con warning y se sigue (los conectores
-// live de Exa/Terac se enganchan acá en T5/T6).
+// Pipeline de búsqueda (T2 + enganche Terac de T5). Orquesta grafo semilla +
+// scorers puros + ROI y arma el SearchResponse. Presupuesto total 8s con
+// degradación parcial: si un paso se pasa del deadline, se salta con warning.
 //
 // Con grafo vacío devuelve opportunities: []. La ruta decide el fallback al
 // fixture — el pipeline nunca inventa datos.
+//
+// includeHumanValidation (T5): cuando es true, inyecta la evidencia de Terac,
+// icpFitRate pasa a venir del estudio (basis 'terac'), humanValidated true y el
+// status de la oportunidad pasa Estimated → Observed.
 
 import type {
   Coverage,
@@ -24,6 +27,11 @@ import {
   loadThemes,
   type SeedGraph,
 } from '@/lib/server/graph/load-graph';
+import {
+  loadTeracStudiesFromSeed,
+  teracStudyToEvidence,
+  type TeracStudy,
+} from '@/lib/server/connectors/terac';
 import { scoreCommunity } from '@/lib/server/scoring/community-score';
 import { scoreTheme } from '@/lib/server/scoring/theme-score';
 import { computeRoi } from '@/lib/server/scoring/roi';
@@ -37,8 +45,8 @@ export interface PipelineDeps {
 
 export interface PipelineOptions {
   budgetMs?: number;
-  // Enganche de T5: cuando es true, icpFitRate/validación humana vienen de Terac.
   includeHumanValidation?: boolean;
+  teracStudies?: TeracStudy[]; // inyectable para tests; por defecto lee seed
   deps?: Partial<PipelineDeps>;
 }
 
@@ -68,8 +76,6 @@ function loadDeps(deps?: Partial<PipelineDeps>): PipelineDeps {
   };
 }
 
-// Une reasons de comunidad + tema, garantizando que cada una tenga evidenceIds
-// resolubles contra el mapa disponible.
 function collectCitedIds(reasons: Reason[]): string[] {
   const ids = new Set<string>();
   for (const r of reasons) for (const id of r.evidenceIds) ids.add(id);
@@ -88,7 +94,24 @@ export function searchOpportunities(
   const sourcesUsed = new Set<EvidenceSource>();
   const sourcesFailed = new Set<EvidenceSource>();
 
-  const { graph, themes, evidence } = loadDeps(options.deps);
+  const deps = loadDeps(options.deps);
+  const { graph, themes } = deps;
+  const evidence: Evidence[] = [...deps.evidence];
+
+  // ---- Enganche Terac (T5) ----
+  const studyByCommunity = new Map<string, TeracStudy>();
+  if (options.includeHumanValidation) {
+    try {
+      const studies = options.teracStudies ?? loadTeracStudiesFromSeed();
+      for (const study of studies) {
+        studyByCommunity.set(study.communityId, study);
+        evidence.push(teracStudyToEvidence(study));
+      }
+    } catch {
+      sourcesFailed.add('terac'); // ningún conector lanza hacia afuera
+    }
+  }
+
   const evidenceById = new Map(evidence.map((e) => [e.id, e]));
   for (const e of evidence) sourcesUsed.add(e.source);
 
@@ -101,7 +124,7 @@ export function searchOpportunities(
     }
     if (themes.length === 0) break;
 
-    // Elegí el tema mejor punteado para esta comunidad.
+    // Tema mejor punteado para esta comunidad.
     let bestTheme: { theme: Theme; result: ReturnType<typeof scoreTheme> } | null = null;
     for (const theme of themes) {
       const result = scoreTheme({ theme, community, evidence, request });
@@ -111,13 +134,26 @@ export function searchOpportunities(
     }
     if (!bestTheme) continue;
 
-    const communityRes = scoreCommunity({ community, evidence, request });
+    const study = studyByCommunity.get(community.id) ?? null;
+    const humanValidated = Boolean(options.includeHumanValidation && study);
+    const teracEv = study ? evidenceById.get(`ev-terac-${study.studyId}`) ?? null : null;
 
-    // Evento vinculado a la comunidad (si hay); si no, evento a co-crear.
-    const event =
-      graph.events.find((e) => e.communityIds.includes(community.id)) ?? null;
+    // Con evidencia Terac, aumentamos evidenceIds de la comunidad para que su
+    // confidence la incluya.
+    const scoringCommunity = teracEv
+      ? { ...community, evidenceIds: [...community.evidenceIds, teracEv.id] }
+      : community;
+    const communityRes = scoreCommunity({ community: scoringCommunity, evidence, request });
+
+    const event = graph.events.find((e) => e.communityIds.includes(community.id)) ?? null;
 
     const reasons: Reason[] = [...communityRes.reasons, ...bestTheme.result.reasons];
+    if (teracEv && study) {
+      reasons.unshift({
+        text: `Validación humana (Terac): ${study.insight}`,
+        evidenceIds: [teracEv.id],
+      });
+    }
     // Regla dura: toda oportunidad devuelta tiene ≥1 reason con evidencia.
     if (reasons.length === 0) continue;
 
@@ -126,12 +162,14 @@ export function searchOpportunities(
       .map((id) => evidenceById.get(id))
       .filter((e): e is Evidence => e != null);
 
-    // icpFitRate: T2 lo estima desde el overlap de stack de la comunidad
-    // (basis 'github'). T5 lo reemplaza por Terac cuando includeHumanValidation.
-    const teracEvidence = citedEvidence.find((e) => e.source === 'terac');
-    const humanValidated = Boolean(options.includeHumanValidation && teracEvidence);
-    const icpFitRate = communityRes.breakdown.stackOverlap;
-    const icpFitBasis = humanValidated ? 'terac' : icpFitRate != null ? 'github' : null;
+    // icpFitRate: con validación humana viene de Terac; si no, del overlap de
+    // stack de la comunidad (basis 'github').
+    const icpFitRate = humanValidated && study ? study.icpFitRate : communityRes.breakdown.stackOverlap;
+    const icpFitBasis: Opportunity['roi']['icpFitBasis'] = humanValidated
+      ? 'terac'
+      : icpFitRate != null
+        ? 'github'
+        : null;
 
     const expectedAttendance = event?.expectedAttendance ?? null;
     const tierPriceUsd = cheapestTierPrice(event);
@@ -143,7 +181,6 @@ export function searchOpportunities(
         : null;
 
     const score = Math.round((communityRes.score + bestTheme.result.score) / 2);
-
     const status: Status = humanValidated ? 'observed' : bestStatus(citedEvidence);
     const confidence =
       citedEvidence.length > 0
@@ -176,7 +213,7 @@ export function searchOpportunities(
           targetSize,
           profile: request.icpStack.slice(0, 2),
           qualifier: null,
-          teracNote: null,
+          teracNote: study ? study.insight : null,
         },
       },
       score,
@@ -192,7 +229,6 @@ export function searchOpportunities(
   candidates.sort((a, b) => b.score - a.score);
   const opportunities = candidates.slice(0, 3);
 
-  // Mapa de evidencia resuelto SOLO con lo citado por el top 3.
   const resolvedEvidence: Record<string, Evidence> = {};
   for (const opp of opportunities) {
     for (const id of collectCitedIds(opp.reasons)) {
