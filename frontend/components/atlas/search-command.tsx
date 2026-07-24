@@ -3,9 +3,8 @@
 import type { FormEvent, ReactNode, RefObject } from "react"
 import { Search } from "lucide-react"
 
-// Chips de interpretación (§5, máximo 3) — vienen de la respuesta real
-// (SearchResponse.interpretation + budget del request), no de un hardcode.
-export type InterpretationChips = { product: string; objective: string; budget: string }
+// Chips de interpretación — vienen de SearchResponse.interpretation.
+export type InterpretationChips = { product: string; objective: string }
 
 // Barra de refinamiento: aparece compacta arriba DESPUÉS del intake inicial —
 // el onboarding (onboarding-intake.tsx) es quien captura la primera búsqueda.
@@ -63,10 +62,6 @@ export function SearchCommand({
           <span className="chip">
             <span className="k">Objective</span>
             <b>{chips.objective}</b>
-          </span>
-          <span className="chip">
-            <span className="k">Budget</span>
-            <b>{chips.budget}</b>
           </span>
         </div>
       )}

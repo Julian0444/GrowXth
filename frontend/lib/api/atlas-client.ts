@@ -20,7 +20,9 @@ export async function searchOpportunities(req: SearchRequest): Promise<SearchRes
       headers: { "content-type": "application/json" },
       body: JSON.stringify(req),
       cache: "no-store",
-      signal: AbortSignal.timeout(9000),
+      // A cold worldwide search can start three bounded Apify Actors. Repeated
+      // queries are served from the six-hour server cache.
+      signal: AbortSignal.timeout(40000),
     })
     if (response.ok) {
       const data: unknown = await response.json()

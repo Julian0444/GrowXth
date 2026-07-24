@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState, type ReactNode } from "react"
-import { ArrowRight, X } from "lucide-react"
+import { Activity, ArrowRight, X } from "lucide-react"
 import type { MarketComparison, Opportunity, OpportunityMetrics, SourceReference } from "@/lib/api/types"
 import type { Evidence, Play, Reason } from "@/lib/contracts/growxth"
 import { CampaignPanel } from "./campaign-panel"
@@ -20,7 +20,6 @@ const METRIC_ROWS: [string, keyof OpportunityMetrics][] = [
   ["Demand", "demand"],
   ["Developer fit", "developerFit"],
   ["Event momentum", "eventMomentum"],
-  ["Cost efficiency", "costEfficiency"],
   ["Competition gap", "competitionGap"],
 ]
 
@@ -34,6 +33,12 @@ const SATURATION_LABEL: Record<MarketComparison["sponsorSaturation"]["market"], 
   medium: "Medium",
   high: "High",
 }
+
+const MOMENTUM_SOURCE_LABEL = {
+  google_trends: "Google Trends",
+  github: "GitHub",
+  x: "X via Apify",
+} as const
 
 export function rankLabel(rank: number): string {
   return String(rank).padStart(2, "0")
@@ -50,10 +55,6 @@ function formatEvidenceWhen(source: SourceReference): string {
   if (source.isEstimated) return "estimated"
   const match = /^(\d{4})-(\d{2})/.exec(source.observedAt)
   return match ? `observed ${MONTHS[Number(match[2]) - 1]} ${match[1]}` : "observed"
-}
-
-function formatCost(cost: { amount: number } | null): string {
-  return cost ? `$${cost.amount}` : "—"
 }
 
 export function OpportunityDrawer({
@@ -211,6 +212,41 @@ export function OpportunityDrawer({
 
               <p className="d-rec">{shown.recommendation}</p>
 
+              {shown.momentumSignals && shown.momentumSignals.length > 0 && (
+                <div className="d-section momentum-card">
+                  <div className="momentum-heading">
+                    <span className="momentum-icon" aria-hidden="true">
+                      <Activity size={13} strokeWidth={1.8} />
+                    </span>
+                    <div>
+                      <span className="eyebrow">Live worldwide momentum</span>
+                      <p>Query-specific signals collected through Apify and ranked by location.</p>
+                    </div>
+                  </div>
+                  <div className="momentum-signals">
+                    {shown.momentumSignals.map((signal) => (
+                      <div className="momentum-signal" key={signal.source}>
+                        <div>
+                          <span className="momentum-source">
+                            {MOMENTUM_SOURCE_LABEL[signal.source]}
+                          </span>
+                          <span className="momentum-label">{signal.label}</span>
+                        </div>
+                        <div className="momentum-value">
+                          <b>{signal.displayValue}</b>
+                          <span className={`signal-status ${signal.status}`}>
+                            {signal.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="momentum-note">
+                    Geographic inferences are labeled; unavailable sources never become zeroes.
+                  </p>
+                </div>
+              )}
+
               <div className="d-section">
                 <span className="eyebrow">Why here</span>
                 {shown.reasons.map((reason) => (
@@ -324,30 +360,12 @@ export function OpportunityDrawer({
                       <div className="v">{comparison.baselineScore}</div>
                     </div>
                     <div className="cmp-row">
-                      <div className="h">Cost / activated dev</div>
-                      <div className="v win">
-                        {formatCost(comparison.costPerActivatedDev.market)}
-                        {comparison.costPerActivatedDev.isEstimated && <span className="est-star">*</span>}
-                      </div>
-                      <div className="v">
-                        {formatCost(comparison.costPerActivatedDev.baseline)}
-                        {comparison.costPerActivatedDev.isEstimated && <span className="est-star">*</span>}
-                      </div>
-                    </div>
-                    <div className="cmp-row">
                       <div className="h">Sponsor saturation</div>
                       <div className="v win">{SATURATION_LABEL[comparison.sponsorSaturation.market]}</div>
                       <div className="v">{SATURATION_LABEL[comparison.sponsorSaturation.baseline]}</div>
                     </div>
                   </div>
-                  <p className="cmp-note">
-                    {comparison.note}{" "}
-                    {comparison.costPerActivatedDev.isEstimated && (
-                      <span className="mono" style={{ fontSize: 10, color: "var(--ink-3)" }}>
-                        *estimated
-                      </span>
-                    )}
-                  </p>
+                  <p className="cmp-note">{comparison.note}</p>
                 </div>
               )}
             </>

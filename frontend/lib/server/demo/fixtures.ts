@@ -4,8 +4,8 @@
 //
 // Datos de San Francisco, plausibles pero curados a mano. Cada reason lleva
 // evidenceIds no vacío; el mapa de evidence resuelve todos los ids referidos;
-// y al menos una oportunidad tiene roi.costPerQualifiedDev === null con
-// note "No disponible" (falta el precio del tier del evento a co-crear).
+// El contrato conserva el objeto roi por compatibilidad, pero el producto no
+// presenta presupuestos ni costos mientras no existan precios verificables.
 
 import type {
   Evidence,
@@ -20,7 +20,7 @@ const GENERATED_AT = '2026-07-24T17:00:00.000Z';
 const QUERY: SearchRequest = {
   product: 'Postgres-native background jobs for Python backends',
   icpStack: ['Python', 'Postgres', 'FastAPI', 'Backend'],
-  budgetUsd: 5000,
+  budgetUsd: 0,
   goal: 'adoption',
 };
 
@@ -96,7 +96,7 @@ const EVIDENCE: Record<string, Evidence> = {
     rightsBasis: 'public_api',
     status: 'observed',
     excerpt:
-      'Quarterly deep-dive series, ~70 attendees, talks on CRDTs and offline-first sync. Sponsor tiers listed publicly.',
+      'Quarterly deep-dive series, ~70 attendees, talks on CRDTs and offline-first sync.',
   },
   'ev-lofi-news': {
     id: 'ev-lofi-news',
@@ -181,7 +181,7 @@ const OPPORTUNITIES: Opportunity[] = [
     lng: -122.4039,
     play: {
       headline:
-        'Co-host with SF Python · tema Postgres-native background jobs · ~60 devs backend/Python · est. $34–48 por dev calificado',
+        'Co-host with SF Python · tema Postgres-native background jobs · ~60 devs backend/Python',
       communityId: 'com-sfpython',
       themeId: 'theme-bg-jobs',
       eventId: 'evt-sfpython-july',
@@ -229,13 +229,13 @@ const OPPORTUNITIES: Opportunity[] = [
       },
     ],
     roi: {
-      tierPriceUsd: 2500,
+      tierPriceUsd: null,
       expectedAttendance: 120,
       icpFitRate: 0.5,
       icpFitBasis: 'terac',
-      costPerQualifiedDev: 41.67,
-      band: [34, 48],
-      note: null,
+      costPerQualifiedDev: null,
+      band: null,
+      note: 'Pricing not verified',
     },
     confidence: 84,
     status: 'observed',
@@ -266,7 +266,7 @@ const OPPORTUNITIES: Opportunity[] = [
     lng: -122.4009,
     play: {
       headline:
-        'Sponsor Local-First SF · tema sync engines para backends Python · ~35 devs offline-first · est. $71–100 por dev calificado',
+        'Partner with Local-First SF · tema sync engines para backends Python · ~35 devs offline-first',
       communityId: 'com-localfirst',
       themeId: 'theme-local-first',
       eventId: 'evt-localfirst-sync',
@@ -304,18 +304,18 @@ const OPPORTUNITIES: Opportunity[] = [
         evidenceIds: ['ev-lofi-news'],
       },
       {
-        text: 'Serie trimestral con tiers de sponsor públicos y ~70 asistentes por noche.',
+        text: 'Serie trimestral con ~70 asistentes por noche.',
         evidenceIds: ['ev-lofi-listing'],
       },
     ],
     roi: {
-      tierPriceUsd: 3000,
+      tierPriceUsd: null,
       expectedAttendance: 70,
       icpFitRate: 0.5,
       icpFitBasis: 'github',
-      costPerQualifiedDev: 85.71,
-      band: [71, 100],
-      note: null,
+      costPerQualifiedDev: null,
+      band: null,
+      note: 'Pricing not verified',
     },
     confidence: 66,
     status: 'estimated',
@@ -346,7 +346,7 @@ const OPPORTUNITIES: Opportunity[] = [
     lng: -122.4194,
     play: {
       headline:
-        'Co-crear con Rust Bay Area · tema async infra · audiencia backend a calificar · ROI no disponible',
+        'Co-crear con Rust Bay Area · tema async infra · audiencia backend a calificar',
       communityId: 'com-rust',
       themeId: 'theme-async-rust',
       eventId: null,

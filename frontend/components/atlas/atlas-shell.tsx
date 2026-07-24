@@ -164,18 +164,6 @@ function detectObjective(query: string): SearchRequest["objective"] {
   return "adoption"
 }
 
-function parseBudget(query: string): SearchRequest["budget"] {
-  const thousands = /\$\s*(\d+(?:\.\d+)?)\s*k\b/i.exec(query)
-  if (thousands) return { amount: Math.round(Number(thousands[1]) * 1000), currency: "USD" }
-  const plain = /\$\s*(\d{3,})\b/.exec(query)
-  return plain ? { amount: Number(plain[1]), currency: "USD" } : undefined
-}
-
-function formatBudget(budget: SearchRequest["budget"]): string {
-  if (!budget) return "Not set"
-  return budget.amount % 1000 === 0 ? `$${budget.amount / 1000}K` : `$${budget.amount}`
-}
-
 function projectResults(opportunities: readonly Opportunity[]): Array<[number, number]> {
   return opportunities.map((item) => projectCity(item.coordinates[0], item.coordinates[1]))
 }
@@ -186,18 +174,19 @@ function toWireRequest(request: SearchRequest): WireSearchRequest {
   return {
     product: request.query,
     icpStack: [],
-    budgetUsd: request.budget?.amount ?? 0,
+    // Se conserva el campo requerido por el backend, pero no se interpreta ni
+    // presenta como evidencia porque no contamos con precios verificables.
+    budgetUsd: 0,
     goal: request.objective === "talent" ? "hiring" : request.objective,
     location: request.location,
   }
 }
 
-// Overrides del intake (objetivo/budget elegidos explícitamente) o retry con el
-// request original; sin overrides, la barra de refinamiento parsea la query.
+// Overrides del intake (objetivo elegido explícitamente) o retry con el request
+// original; sin overrides, la barra de refinamiento interpreta la query.
 type SearchOverrides = {
   request?: SearchRequest
   objective?: SearchRequest["objective"]
-  budget?: SearchRequest["budget"]
 }
 
 export function AtlasShell() {
@@ -284,7 +273,6 @@ export function AtlasShell() {
       const builtRequest: SearchRequest = overrides.request ?? {
         query,
         objective: overrides.objective ?? detectObjective(query),
-        budget: overrides.budget ?? parseBudget(query),
         timeRange: timeRangeRef.current,
         layers: layersRef.current,
       }
@@ -350,7 +338,7 @@ export function AtlasShell() {
 
   const launchFromIntake = useCallback(
     (payload: IntakePayload) => {
-      runSearch(payload.description, { objective: payload.objective, budget: payload.budget })
+      runSearch(payload.description, { objective: payload.objective })
     },
     [runSearch],
   )
@@ -427,10 +415,6 @@ export function AtlasShell() {
         const requestFromLink: SearchRequest = {
           query: wire.query.product,
           objective: wire.query.goal === "hiring" ? "talent" : wire.query.goal,
-          budget:
-            wire.query.budgetUsd > 0
-              ? { amount: wire.query.budgetUsd, currency: "USD" }
-              : undefined,
           technologies: wire.query.icpStack,
           timeRange: "30d",
           layers: ["demand", "events", "communities"],
@@ -588,7 +572,6 @@ export function AtlasShell() {
     ? {
         product: response.interpretation.category,
         objective: response.interpretation.objective,
-        budget: formatBudget(searchRequest?.budget),
       }
     : null
 

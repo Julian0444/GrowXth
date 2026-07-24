@@ -42,21 +42,14 @@ function shortLabel(text: string): string {
   return words.length < text.trim().length ? `${words}…` : words
 }
 
-function costBand(costPerQualifiedDev: number | null): LegacyOpportunity["activationCostBand"] {
-  if (costPerQualifiedDev == null) return "unknown"
-  if (costPerQualifiedDev < 40) return "low"
-  if (costPerQualifiedDev < 80) return "medium"
-  return "high"
-}
-
 function toMetrics(opp: NewOpportunity): OpportunityMetrics {
   const c = opp.breakdown.community
   const t = opp.breakdown.theme
   return {
     demand: pct(t.momentum),
     developerFit: pct(c.stackOverlap),
-    eventMomentum: pct(t.momentum),
-    costEfficiency: pct(c.confidence),
+    eventMomentum: opp.event ? pct(t.momentum) : null,
+    costEfficiency: null,
     competitionGap: pct(t.saturationGap ?? c.exclusivityGap),
   }
 }
@@ -107,7 +100,7 @@ function toEvents(
       url: opp.event.url,
       startsAt: opp.event.startsAt ?? new Date().toISOString(),
       venue: opp.event.venueArea ?? undefined,
-      city: opp.event.venueArea ?? "San Francisco",
+      city: opp.event.venueArea ?? opp.market?.city ?? "Location unavailable",
       coordinates: [opp.lng, opp.lat],
       sponsors: [],
       relevance: opp.score,
@@ -134,9 +127,16 @@ function toEvents(
 }
 
 function toCampaign(opp: NewOpportunity): CampaignRecommendation {
-  const target = opp.play.audienceSpec.targetSize ?? 40
-  const budget = opp.roi.tierPriceUsd ?? 2500
-  const retained = Math.max(1, Math.round(target * 0.25))
+  const target = opp.play.audienceSpec.targetSize
+  const funnel =
+    target == null
+      ? []
+      : [
+          { label: "Event audience", value: target },
+          { label: "Qualified builders", value: Math.max(1, Math.round(target * 0.55)) },
+          { label: "Activated", value: Math.max(1, Math.round(target * 0.35)) },
+          { label: "Retained", value: Math.max(1, Math.round(target * 0.25)) },
+        ]
   return {
     campaignId: opp.campaign.id,
     opportunityId: opp.id,
@@ -145,18 +145,8 @@ function toCampaign(opp: NewOpportunity): CampaignRecommendation {
     track: opp.play.headline,
     prize: "Hands-on product credit for the winning build",
     workshop: `A practical session for ${opp.play.audienceSpec.profile.join(" + ") || "builders"}`,
-    budgetBreakdown: [
-      { label: "Community partnership", amount: budget },
-      { label: "Workshop + activation", amount: Math.round(budget * 0.35) },
-    ],
     organizerMessage: opp.campaign.variantA,
-    funnel: [
-      { label: "Event audience", value: target },
-      { label: "Qualified builders", value: Math.max(1, Math.round(target * 0.55)) },
-      { label: "Activated", value: Math.max(1, Math.round(target * 0.35)) },
-      { label: "Retained", value: retained },
-    ],
-    costPerRetained: `$${Math.round((budget * 1.35) / retained)}`,
+    funnel,
     attributionCode: `GROWX-${opp.id.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`,
     variantA: opp.campaign.variantA,
     variantB: opp.campaign.variantB,
@@ -171,12 +161,14 @@ function toLegacyOpportunity(
   return {
     id: opp.id,
     rank: index + 1,
-    city: opp.subtitle.split(" · ")[0] || opp.event?.venueArea || opp.title,
-    country: "USA",
+    city:
+      opp.market?.city ??
+      (opp.subtitle.split(" · ")[0] || opp.event?.venueArea || opp.title),
+    country: opp.market?.country ?? "United States",
     coordinates: [opp.lng, opp.lat], // SIEMPRE [lng, lat]
     score: opp.score,
     confidence: opp.confidence,
-    activationCostBand: costBand(opp.roi.costPerQualifiedDev),
+    activationCostBand: "unknown",
     recommendation: opp.play.headline,
     reasons: toReasons(opp),
     metrics: toMetrics(opp),
@@ -185,6 +177,7 @@ function toLegacyOpportunity(
     events: toEvents(opp, evidence),
     campaign: toCampaign(opp),
     distanceMiles: opp.distanceMiles,
+    momentumSignals: opp.momentumSignals,
   }
 }
 

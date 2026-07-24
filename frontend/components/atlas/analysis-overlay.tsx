@@ -6,9 +6,9 @@
 // inventados ni completado ficticio).
 export const SEARCH_STAGES = [
   { id: "understanding", label: "Understanding your product" },
-  { id: "matching", label: "Matching technical communities" },
-  { id: "events", label: "Finding relevant events" },
-  { id: "ranking", label: "Ranking San Francisco growth plays" },
+  { id: "matching", label: "Reading Google Trends and GitHub" },
+  { id: "events", label: "Collecting X signals through Apify" },
+  { id: "ranking", label: "Ranking worldwide growth markets" },
 ] as const
 
 export type SearchStageId = (typeof SEARCH_STAGES)[number]["id"]

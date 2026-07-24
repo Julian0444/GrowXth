@@ -1,6 +1,6 @@
 // Formatter de respuesta SMS/mensajería (T4). Función pura.
 // Restricciones: ≤3 opciones, ~500 chars en total, exactamente 1 link por
-// opción. Honesto: si el ROI no está disponible, lo dice ("ROI N/D").
+// opción. No presenta costos porque las fuentes no ofrecen precios verificables.
 
 import type { Opportunity, SearchResponse } from '@/lib/contracts/growxth';
 
@@ -11,11 +11,6 @@ export interface SmsReplyOptions {
 }
 
 const DEFAULT_MAX = 500;
-
-function roiText(opp: Opportunity): string {
-  const { band } = opp.roi;
-  return band ? `$${band[0]}-${band[1]}/dev` : 'ROI N/D';
-}
 
 function link(baseUrl: string, opp: Opportunity, shareId?: string): string {
   const base = baseUrl.replace(/\/+$/, '');
@@ -30,10 +25,10 @@ export function formatSmsReply(response: SearchResponse, options: SmsReplyOption
 
   const top = response.opportunities.slice(0, 3);
   if (top.length === 0) {
-    return 'No encontré jugadas con evidencia todavía. Probá con más presupuesto o un ICP más amplio.';
+    return 'No encontré jugadas con evidencia todavía. Probá con un ICP más amplio.';
   }
 
-  const header = `${top.length} jugada${top.length > 1 ? 's' : ''} para SF:`;
+  const header = `${top.length} mercado${top.length > 1 ? 's' : ''} global${top.length > 1 ? 'es' : ''}:`;
 
   // Presupuesto de caracteres por opción para el texto (sin el link).
   const lines = top.map((opp, i) => {
@@ -41,10 +36,10 @@ export function formatSmsReply(response: SearchResponse, options: SmsReplyOption
     // Reservamos el link completo + numeración; recortamos solo el título.
     const prefix = `${i + 1}) `;
     const distance = opp.distanceMiles != null ? ` · ${opp.distanceMiles}mi` : '';
-    const suffix = ` ${roiText(opp)}${distance} → ${url}`;
-    const budget = Math.max(20, Math.floor((maxChars - header.length) / top.length) - suffix.length - prefix.length);
+    const suffix = `${distance} → ${url}`;
+    const titleBudget = Math.max(20, Math.floor((maxChars - header.length) / top.length) - suffix.length - prefix.length);
     let title = opp.title;
-    if (title.length > budget) title = `${title.slice(0, Math.max(1, budget - 1)).trimEnd()}…`;
+    if (title.length > titleBudget) title = `${title.slice(0, Math.max(1, titleBudget - 1)).trimEnd()}…`;
     return `${prefix}${title}${suffix}`;
   });
 

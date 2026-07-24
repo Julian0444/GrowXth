@@ -406,20 +406,6 @@
 }
 .atlas .intake-chips button:hover { color: var(--ink); border-color: rgba(17,17,17,0.3); }
 .atlas .intake-chips button.on { background: var(--ink); border-color: var(--ink); color: #fff; }
-.atlas .intake-label .opt { text-transform: none; letter-spacing: 0.04em; color: var(--ink-3); }
-.atlas .intake-budget {
-  display: flex; align-items: center; gap: 8px; width: min(240px, 100%);
-  border: 1px solid var(--panel-border); border-radius: 13px;
-  background: rgba(255,255,255,0.8); padding: 0 13px;
-  transition: border-color 150ms var(--ease);
-}
-.atlas .intake-budget:focus-within { border-color: rgba(17,17,17,0.35); }
-.atlas .intake-budget span { color: var(--ink-3); font-size: 14px; }
-.atlas .intake-budget input {
-  flex: 1; min-width: 0; border: 0; background: none; outline: none;
-  font-family: var(--sans); font-size: 14px; color: var(--ink); height: 42px;
-}
-.atlas .intake-budget input::placeholder { color: var(--ink-3); }
 .atlas .intake-go {
   margin-top: 24px; width: 100%; background: var(--ink); color: #fff; border-radius: 13px;
   font-size: 13.5px; font-weight: 550; height: 46px;
@@ -536,6 +522,44 @@
 .atlas .d-rec { font-size: 14.5px; line-height: 1.5; margin-top: 16px; letter-spacing: -0.005em; }
 .atlas .d-section { margin-top: 22px; }
 .atlas .d-section > .eyebrow { display: block; margin-bottom: 11px; }
+.atlas .momentum-card {
+  border: 1px solid var(--panel-border); border-radius: 15px; padding: 14px;
+  background: linear-gradient(145deg, rgba(17,17,17,0.038), rgba(255,255,255,0.72));
+}
+.atlas .momentum-heading { display: flex; gap: 10px; align-items: flex-start; }
+.atlas .momentum-heading .eyebrow { display: block; margin: 0 0 3px; }
+.atlas .momentum-heading p { font-size: 10.5px; line-height: 1.45; color: var(--ink-2); }
+.atlas .momentum-icon {
+  width: 27px; height: 27px; flex: none; display: grid; place-items: center;
+  border-radius: 9px; color: #fff; background: var(--ink);
+}
+.atlas .momentum-signals { margin-top: 12px; border-top: 1px solid var(--hairline); }
+.atlas .momentum-signal {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(116px, auto);
+  align-items: center; gap: 16px;
+  padding: 9px 0; border-bottom: 1px solid var(--hairline);
+}
+.atlas .momentum-signal > div:first-child {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0;
+}
+.atlas .momentum-source {
+  display: block; font-family: var(--mono); font-size: 9px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--ink);
+}
+.atlas .momentum-label { display: block; font-size: 10px; line-height: 1.3; color: var(--ink-3); }
+.atlas .momentum-value {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  min-width: 0; text-align: right;
+}
+.atlas .momentum-value b { display: block; font-size: 11px; font-weight: 550; color: var(--ink); }
+.atlas .signal-status {
+  display: inline-block; font-family: var(--mono); font-size: 8px;
+  letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3);
+}
+.atlas .signal-status.observed { color: #17673a; }
+.atlas .signal-status.estimated { color: #87630f; }
+.atlas .signal-status.unavailable { color: #8a3a3a; }
+.atlas .momentum-note { margin-top: 9px; font-size: 9px; line-height: 1.4; color: var(--ink-3); }
 .atlas .reason { display: flex; gap: 11px; padding: 8px 0; border-top: 1px solid var(--hairline); }
 .atlas .reason:first-of-type { border-top: 0; padding-top: 0; }
 .atlas .reason .sig {
@@ -619,9 +643,6 @@
 .atlas .kv:first-of-type { border-top: 0; }
 .atlas .kv .k { font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.11em; text-transform: uppercase; color: var(--ink-3); width: 86px; flex: none; padding-top: 2px; }
 .atlas .kv .v { font-size: 12.5px; line-height: 1.45; }
-.atlas .budget-row { display: flex; justify-content: space-between; font-size: 12px; padding: 6px 0; border-top: 1px solid var(--hairline); }
-.atlas .budget-row .amt { font-family: var(--mono); }
-.atlas .budget-row.total { font-weight: 600; border-top: 1px solid rgba(17,17,17,0.25); }
 .atlas .outreach {
   font-size: 12px; line-height: 1.55; color: var(--ink-2); background: rgba(17,17,17,0.033);
   border-radius: 12px; padding: 12px 14px; position: relative; font-style: italic;
@@ -637,12 +658,6 @@
 .atlas .funnel-step .bar { flex: 1; height: 14px; border-radius: 4px; background: rgba(17,17,17,0.06); overflow: hidden; }
 .atlas .funnel-step .bar i { display: block; height: 100%; background: rgba(17,17,17,0.75); border-radius: 4px; animation: atlas-grow 700ms var(--ease); }
 .atlas .funnel-step .val { font-family: var(--mono); font-size: 11px; width: 52px; text-align: right; flex: none; }
-.atlas .funnel-final {
-  margin-top: 10px; background: var(--ink); color: #fff; border-radius: 12px;
-  padding: 11px 14px; display: flex; justify-content: space-between; align-items: baseline;
-}
-.atlas .funnel-final .lbl { font-size: 11.5px; opacity: 0.7; }
-.atlas .funnel-final .val { font-family: var(--mono); font-size: 17px; font-weight: 500; }
 .atlas .attr-chip {
   display: inline-flex; align-items: center; gap: 8px; margin-top: 4px;
   font-family: var(--mono); font-size: 11.5px; border: 1px dashed rgba(17,17,17,0.3);
@@ -831,7 +846,6 @@
   .atlas .intake-card { padding: 22px 20px 20px; }
   .atlas .intake-title { font-size: 21px; }
   .atlas .intake-field { font-size: 16px; }
-  .atlas .intake-budget input { font-size: 16px; height: 44px; }
   .atlas .intake-chips button { min-height: 44px; }
   /* Bottom sheet: medium 46svh ↔ tall 88svh (grabber); el mapa sigue visible arriba. */
   .atlas .drawer {

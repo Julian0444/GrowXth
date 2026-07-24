@@ -14,6 +14,7 @@ const SPECS: EnvSpec[] = [
   { name: 'LINQ_WEBHOOK_SECRET', purpose: 'verificación de firma del webhook de Linq', requiredInProd: true },
   { name: 'TERAC_API_KEY', purpose: 'borradores y resultados A/B de Terac' },
   { name: 'EXA_API_KEY', purpose: 'enriquecimiento batch de fuentes públicas con Exa' },
+  { name: 'APIFY_TOKEN', purpose: 'señales mundiales de Google Trends, GitHub y X' },
 ];
 
 let alreadyChecked = false;

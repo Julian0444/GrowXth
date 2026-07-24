@@ -18,7 +18,7 @@ function findOpportunity(id: string | null): Opportunity | null {
 }
 
 function roiLine(opp: Opportunity | null): string {
-  if (!opp) return 'Developer growth plays · San Francisco';
+  if (!opp) return 'Worldwide developer growth opportunities';
   const { band } = opp.roi;
   return band ? `est. $${band[0]}–${band[1]} por dev calificado` : 'ROI: No disponible';
 }
@@ -27,7 +27,7 @@ export async function GET(request: Request): Promise<ImageResponse> {
   const { searchParams } = new URL(request.url);
   const opp = findOpportunity(searchParams.get('id'));
 
-  const headline = opp?.play.headline ?? opp?.title ?? 'GrowXth — jugadas de developer growth en SF';
+  const headline = opp?.play.headline ?? opp?.title ?? 'GrowXth — worldwide developer growth';
   const score = opp ? `${opp.score}` : '—';
 
   return new ImageResponse(
@@ -46,7 +46,7 @@ export async function GET(request: Request): Promise<ImageResponse> {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', fontSize: 30, letterSpacing: 2, color: '#8ea2d6' }}>
-          GROWXTH · SAN FRANCISCO
+          GROWXTH · WORLDWIDE
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column' }}>

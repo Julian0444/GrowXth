@@ -49,6 +49,6 @@ export async function POST(request: Request): Promise<NextResponse<SearchRespons
     parsed = { product: '', icpStack: [], budgetUsd: 0, goal: 'adoption' };
   }
 
-  const response = searchOrFixture(parsed);
+  const response = await searchOrFixture(parsed);
   return NextResponse.json(response);
 }

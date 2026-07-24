@@ -10,6 +10,9 @@ import { OpportunityMarker } from "./opportunity-marker"
 import { SignalCloudLayer } from "./signal-cloud-layer"
 
 const GEO_URL = "/geo/countries-110m.json"
+const TOPO_COUNTRY_NAME: Record<string, string> = {
+  "United States": "United States of America",
+}
 
 // Solo re-renderiza al cambiar el país activo — los vuelos de cámara no tocan React.
 // El resaltado matchea por nombre de país (properties.name del TopoJSON), así
@@ -24,7 +27,8 @@ const LandLayer = memo(function LandLayer({ activeCountry }: { activeCountry: st
             .map((geography) => {
               const active =
                 activeCountry !== null &&
-                (geography.properties as { name?: string } | undefined)?.name === activeCountry
+                (geography.properties as { name?: string } | undefined)?.name ===
+                  (TOPO_COUNTRY_NAME[activeCountry] ?? activeCountry)
               return (
                 <Geography
                   key={geography.rsmKey}

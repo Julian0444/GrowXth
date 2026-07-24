@@ -46,11 +46,6 @@ function parseSearchRequest(text: string): SearchRequest {
       STACK_VOCAB.filter(([needle]) => lower.includes(needle)).map(([, label]) => label),
     ),
   ];
-  let budgetUsd = 0;
-  const thousands = /\$\s*(\d+(?:\.\d+)?)\s*k\b/i.exec(text);
-  const plain = /\$\s*(\d{3,})\b/.exec(text);
-  if (thousands) budgetUsd = Math.round(Number(thousands[1]) * 1000);
-  else if (plain) budgetUsd = Number(plain[1]);
   const goal: SearchRequest['goal'] = /hiring|recruit|talent/.test(lower)
     ? 'hiring'
     : /awareness|brand/.test(lower)
@@ -58,7 +53,7 @@ function parseSearchRequest(text: string): SearchRequest {
       : /feedback/.test(lower)
         ? 'feedback'
         : 'adoption';
-  return { product: text.trim(), icpStack, budgetUsd, goal };
+  return { product: text.trim(), icpStack, budgetUsd: 0, goal };
 }
 
 function appUrl(): string {
@@ -99,7 +94,7 @@ async function deliverSearch(
   sent: Awaited<ReturnType<typeof linq.sendMessage>>;
   shareId: string;
 }> {
-  const response = searchOrFixture(request);
+  const response = await searchOrFixture(request);
   setChatSearch(event.chatId, request, response);
   registerTopCampaign(response);
   const shared = createSharedSearch(response, response.opportunities[0]?.id ?? null);

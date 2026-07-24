@@ -46,9 +46,18 @@ export interface Theme {
 }
 
 // ============ L2: evidencia ============
-export type EvidenceSource = 'exa' | 'luma' | 'github' | 'terac' | 'linq' | 'seed';
+export type EvidenceSource =
+  | 'exa'
+  | 'luma'
+  | 'github'
+  | 'google_trends'
+  | 'x'
+  | 'terac'
+  | 'linq'
+  | 'seed';
 export type EvidenceKind =
   | 'web_page' | 'event_listing' | 'repo_activity'
+  | 'search_trend' | 'social_post'
   | 'human_interview' | 'human_confirmation' | 'prepared_fixture';
 export type RightsBasis =
   | 'public_web' | 'public_api' | 'consented_panel'
@@ -59,6 +68,7 @@ export interface Evidence {
   url: string | null; title: string; observedAt: string;
   location: string | null; confidence: number;
   rightsBasis: RightsBasis; status: Status;
+  collector?: 'apify' | 'direct' | 'prepared';
   excerpt?: string;                       // máx ~200 chars
 }
 
@@ -129,6 +139,17 @@ export interface CampaignDraft {
   variantB: string;
 }
 
+export interface MarketMomentumSignal {
+  source: 'google_trends' | 'github' | 'x';
+  label: string;
+  displayValue: string;
+  value: number | null;                  // escala normalizada 0–100
+  status: 'observed' | 'estimated' | 'unavailable';
+  basis: 'city' | 'country' | 'profile_location' | 'global';
+  observedAt: string;
+  evidenceIds: string[];
+}
+
 // Nombre conservado a propósito: el frontend ya está construido contra Opportunity.
 export interface Opportunity {
   id: string; title: string; subtitle: string;
@@ -142,6 +163,12 @@ export interface Opportunity {
   status: Status;
   humanValidated: boolean;            // reservado; Terac NO modifica ranking
   distanceMiles: number | null;       // contexto, nunca input del market score
+  market?: {
+    city: string;
+    country: string;
+    countryCode: string;
+  };
+  momentumSignals?: MarketMomentumSignal[];
   event: {
     id: string;
     name: string;

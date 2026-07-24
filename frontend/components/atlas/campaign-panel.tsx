@@ -11,10 +11,6 @@ import {
   type CampaignResults,
 } from "@/lib/api/atlas-client"
 
-function formatAmount(amount: number): string {
-  return `$${amount.toLocaleString("en-US")}`
-}
-
 // Vista de campaña (§9) — vive dentro del mismo .drawer-view que la oportunidad;
 // el crossfade y el foco los maneja OpportunityDrawer. Consume el contrato
 // CampaignRecommendation — la campaña llega con la Opportunity del backend.
@@ -31,7 +27,6 @@ export function CampaignPanel({
   onBack: () => void
   onToast: (message: string) => void
 }) {
-  const total = campaign.budgetBreakdown.reduce((sum, item) => sum + item.amount, 0)
   // El funnel se normaliza al primer paso (registrations = 100%).
   const funnelMax = Math.max(1, ...campaign.funnel.map((step) => step.value))
   const [results, setResults] = useState<CampaignResults | null>(null)
@@ -143,20 +138,6 @@ export function CampaignPanel({
         <div className="kv">
           <span className="k">Workshop</span>
           <span className="v">{campaign.workshop}</span>
-        </div>
-      </div>
-
-      <div className="d-section">
-        <span className="eyebrow">{`Budget · ${formatAmount(total)}`}</span>
-        {campaign.budgetBreakdown.map((item) => (
-          <div className="budget-row" key={item.label}>
-            <span>{item.label}</span>
-            <span className="amt">{formatAmount(item.amount)}</span>
-          </div>
-        ))}
-        <div className="budget-row total">
-          <span>Total</span>
-          <span className="amt">{formatAmount(total)}</span>
         </div>
       </div>
 
@@ -278,23 +259,20 @@ export function CampaignPanel({
 
       {error && <p className="track-error" role="alert">{error}</p>}
 
-      <div className="d-section">
-        <span className="eyebrow">Measurement plan · projected example</span>
-        {campaign.funnel.map((step) => (
-          <div className="funnel-step" key={step.label}>
-            <span className="lbl">{step.label}</span>
-            <span className="bar">
-              <i style={{ width: `${(step.value / funnelMax) * 100}%` }} />
-            </span>
-            <span className="val mono">{step.value}</span>
-          </div>
-        ))}
-        {/* Métrica North Star del producto — siempre visible al cierre del funnel. */}
-        <div className="funnel-final">
-          <span className="lbl">Cost per retained developer</span>
-          <span className="val">{campaign.costPerRetained}</span>
+      {campaign.funnel.length > 0 && (
+        <div className="d-section">
+          <span className="eyebrow">Measurement plan · projected example</span>
+          {campaign.funnel.map((step) => (
+            <div className="funnel-step" key={step.label}>
+              <span className="lbl">{step.label}</span>
+              <span className="bar">
+                <i style={{ width: `${(step.value / funnelMax) * 100}%` }} />
+              </span>
+              <span className="val mono">{step.value}</span>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
 
       <div className="d-section">
         <span className="eyebrow">Attribution</span>

@@ -45,13 +45,6 @@ function bestStatus(evidence: Evidence[]): Status {
   return best;
 }
 
-function cheapestTierPrice(event: SeedGraph['events'][number]): number | null {
-  const priced = event.sponsorTiers
-    .map((tier) => tier.priceUsd)
-    .filter((price): price is number => price != null && price > 0);
-  return priced.length > 0 ? Math.min(...priced) : null;
-}
-
 function loadDeps(deps?: Partial<PipelineDeps>): PipelineDeps {
   return {
     graph: deps?.graph ?? loadGraph(),
@@ -179,7 +172,9 @@ export function searchOpportunities(
         ? event.expectedAttendance
         : null;
     const roi = computeRoi({
-      tierPriceUsd: cheapestTierPrice(event),
+      // Los listings no ofrecen un costo completo y comparable de organizar la
+      // activación; no convertimos tiers aislados en un presupuesto estimado.
+      tierPriceUsd: null,
       expectedAttendance,
       icpFitRate,
       icpFitBasis: icpFitRate == null ? null : 'luma',
@@ -206,12 +201,7 @@ export function searchOpportunities(
           )
         : null;
 
-    const headline =
-      roi.costPerQualifiedDev != null && roi.band
-        ? `Co-host ${event.name} with ${community.name} · ~${
-            targetSize ?? '?'
-          } qualified builders · est. $${roi.band[0]}–$${roi.band[1]} each`
-        : `Meet ${community.name} through ${event.name} · ROI not available until sponsor pricing is confirmed`;
+    const headline = `Activate ${community.name} through ${event.name} with a hands-on developer play`;
 
     candidates.push({
       id,

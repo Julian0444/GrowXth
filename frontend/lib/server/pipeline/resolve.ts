@@ -9,15 +9,16 @@ import { getFixtureSearchResponse } from '@/lib/server/demo/fixtures';
 import { auditResponse } from '@/lib/server/audit/labels';
 import { SIX_HOURS_MS, TtlCache } from '@/lib/server/cache';
 import { checkEnvOnce } from '@/lib/server/env';
+import { searchGlobalMarkets } from '@/lib/server/pipeline/global-market-search';
 import { searchOpportunities, type PipelineOptions } from '@/lib/server/pipeline/search-opportunities';
 
 const cache = new TtlCache<SearchResponse>(SIX_HOURS_MS);
+const pending = new Map<string, Promise<SearchResponse>>();
 
 function cacheKey(request: SearchRequest): string {
   return JSON.stringify({
     product: request.product,
     icpStack: request.icpStack,
-    budgetUsd: request.budgetUsd,
     goal: request.goal,
     location: request.location ?? null,
   });
@@ -33,22 +34,43 @@ function fixtureFallback(request: SearchRequest): SearchResponse {
   };
 }
 
-export function searchOrFixture(request: SearchRequest, options?: PipelineOptions): SearchResponse {
+export async function searchOrFixture(
+  request: SearchRequest,
+  options?: PipelineOptions,
+): Promise<SearchResponse> {
   checkEnvOnce();
 
   const key = cacheKey(request);
   const cached = cache.get(key);
   if (cached) return cached;
+  const inFlight = pending.get(key);
+  if (inFlight) return inFlight;
 
-  let response: SearchResponse;
+  const work = (async (): Promise<SearchResponse> => {
+    let response: SearchResponse;
+    try {
+      response = await searchGlobalMarkets(request);
+      if (response.opportunities.length === 0) {
+        const local = searchOpportunities(request, options);
+        response = local.opportunities.length > 0 ? local : fixtureFallback(request);
+      }
+    } catch {
+      try {
+        const local = searchOpportunities(request, options);
+        response = local.opportunities.length > 0 ? local : fixtureFallback(request);
+      } catch {
+        response = fixtureFallback(request);
+      }
+    }
+
+    const audited = auditResponse(response);
+    cache.set(key, audited);
+    return audited;
+  })();
+  pending.set(key, work);
   try {
-    const result = searchOpportunities(request, options);
-    response = result.opportunities.length > 0 ? result : fixtureFallback(request);
-  } catch {
-    response = fixtureFallback(request);
+    return await work;
+  } finally {
+    pending.delete(key);
   }
-
-  const audited = auditResponse(response);
-  cache.set(key, audited);
-  return audited;
 }

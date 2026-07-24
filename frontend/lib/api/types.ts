@@ -1,3 +1,5 @@
+import type { MarketMomentumSignal } from "@/lib/contracts/growxth"
+
 // Contrato con el backend (§10 del plan) — el frontend consume UN solo tipo para
 // backend real, fixtures y fallback. Reglas: nunca números sin marcar real vs.
 // estimado; IDs de señales estables; fechas ISO 8601; coordenadas [lng, lat];
@@ -6,7 +8,6 @@
 export type SearchRequest = {
   query: string
   objective: "adoption" | "feedback" | "talent" | "awareness"
-  budget?: { amount: number; currency: "USD" }
   audience?: string[]
   technologies?: string[]
   timeRange: "7d" | "30d" | "90d"
@@ -64,6 +65,7 @@ export type Opportunity = {
   comparison?: MarketComparison
   campaign?: CampaignRecommendation
   distanceMiles?: number | null
+  momentumSignals?: MarketMomentumSignal[]
 }
 
 export type OpportunityReason = {
@@ -155,10 +157,8 @@ export type CampaignRecommendation = {
   track: string
   prize: string
   workshop: string
-  budgetBreakdown: Array<{ label: string; amount: number }>
   organizerMessage: string
   funnel: Array<{ label: string; value: number }>
-  costPerRetained: string
   attributionCode: string // ej. "GROWX-BLR-0823"
   variantA: string
   variantB: string
