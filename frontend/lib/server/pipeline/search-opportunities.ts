@@ -22,6 +22,7 @@ import type {
   Theme,
 } from '@/lib/contracts/growxth';
 import {
+  loadCommunityEvidence,
   loadEvidence,
   loadGraph,
   loadThemes,
@@ -41,6 +42,7 @@ export interface PipelineDeps {
   graph: SeedGraph;
   themes: Theme[];
   evidence: Evidence[];
+  communityEvidence: Record<string, Evidence[]>;
 }
 
 export interface PipelineOptions {
@@ -73,6 +75,7 @@ function loadDeps(deps?: Partial<PipelineDeps>): PipelineDeps {
     graph: deps?.graph ?? loadGraph(),
     themes: deps?.themes ?? loadThemes(),
     evidence: deps?.evidence ?? loadEvidence(),
+    communityEvidence: deps?.communityEvidence ?? loadCommunityEvidence(),
   };
 }
 
@@ -95,7 +98,7 @@ export function searchOpportunities(
   const sourcesFailed = new Set<EvidenceSource>();
 
   const deps = loadDeps(options.deps);
-  const { graph, themes } = deps;
+  const { graph, themes, communityEvidence } = deps;
   const evidence: Evidence[] = [...deps.evidence];
 
   // ---- Enganche Terac (T5) ----
@@ -138,10 +141,21 @@ export function searchOpportunities(
     const humanValidated = Boolean(options.includeHumanValidation && study);
     const teracEv = study ? evidenceById.get(`ev-terac-${study.studyId}`) ?? null : null;
 
-    // Con evidencia Terac, aumentamos evidenceIds de la comunidad para que su
-    // confidence la incluya.
-    const scoringCommunity = teracEv
-      ? { ...community, evidenceIds: [...community.evidenceIds, teracEv.id] }
+    // Evidencia web de Exa para esta comunidad (opcional). Se suma al pool.
+    const exaEv = communityEvidence[community.id] ?? [];
+    for (const e of exaEv) {
+      if (!evidenceById.has(e.id)) {
+        evidence.push(e);
+        evidenceById.set(e.id, e);
+        sourcesUsed.add(e.source);
+      }
+    }
+
+    // Aumentamos los evidenceIds de la comunidad (Terac + Exa) para que su
+    // confidence los incluya.
+    const extraIds = [...(teracEv ? [teracEv.id] : []), ...exaEv.map((e) => e.id)];
+    const scoringCommunity = extraIds.length
+      ? { ...community, evidenceIds: [...community.evidenceIds, ...extraIds] }
       : community;
     const communityRes = scoreCommunity({ community: scoringCommunity, evidence, request });
 
@@ -152,6 +166,13 @@ export function searchOpportunities(
       reasons.unshift({
         text: `Validación humana (Terac): ${study.insight}`,
         evidenceIds: [teracEv.id],
+      });
+    }
+    // Exa: completa los evidenceIds de la oportunidad con cobertura web.
+    if (exaEv.length > 0) {
+      reasons.push({
+        text: `Cobertura web relevante (Exa): ${exaEv.length} fuente(s).`,
+        evidenceIds: exaEv.map((e) => e.id),
       });
     }
     // Regla dura: toda oportunidad devuelta tiene ≥1 reason con evidencia.

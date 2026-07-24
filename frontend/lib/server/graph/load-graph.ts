@@ -108,3 +108,17 @@ export function loadThemes(seedDir: string = findSeedDir()): Theme[] {
 export function loadEvidence(seedDir: string = findSeedDir()): Evidence[] {
   return readOptionalArray<Evidence>(seedDir, OPTIONAL_FILES.evidence);
 }
+
+// Evidencia web por comunidad (generada por scripts/enrich_exa.py). Opcional:
+// {} si el archivo no existe (Exa falló o no había key) — el sistema sigue igual.
+export function loadCommunityEvidence(
+  seedDir: string = findSeedDir(),
+): Record<string, Evidence[]> {
+  const path = join(seedDir, 'community-evidence.json');
+  if (!existsSync(path)) return {};
+  const parsed = parseJsonc(readFileSync(path, 'utf8'), 'community-evidence.json');
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    return parsed as Record<string, Evidence[]>;
+  }
+  return {};
+}
