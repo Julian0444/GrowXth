@@ -1,0 +1,19 @@
+// Community[] — ver frontend/lib/contracts/growxth.ts (interface Community).
+// Cargá las comunidades reales de SF a mano dentro del array de abajo.
+// Forma de cada item:
+// {
+//   "id": "com-sfpython",                // único dentro de este archivo
+//   "name": "SF Python",
+//   "url": "https://www.meetup.com/sfpython/",
+//   "kind": "meetup-series",             // discord | meetup-series | university | org | slack
+//   "cadence": "monthly",                // weekly | monthly | quarterly | irregular | null
+//   "eventsRun12mo": 11,                 // corridos de verdad, no anunciados; o null
+//   "foundedYear": 2011,                 // o null
+//   "sizeEstimate": 4200,                // o null
+//   "sizeBasis": "observed" | "estimated" | "prepared",
+//   "stack": ["Python", "Postgres"],
+//   "organizerIds": ["org-..."],         // deben existir en sf-organizers.json
+//   "pastSponsors": [],
+//   "evidenceIds": ["ev-..."]
+// }
+[]

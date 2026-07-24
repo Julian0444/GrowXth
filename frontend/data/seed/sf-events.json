@@ -1,0 +1,21 @@
+// SFEvent[] — ver frontend/lib/contracts/growxth.ts (interface SFEvent).
+// Cargá los eventos reales de SF a mano dentro del array de abajo.
+// Forma de cada item:
+// {
+//   "id": "evt-sfpython-july",           // único dentro de este archivo
+//   "name": "SF Python — July Meetup",
+//   "url": "https://lu.ma/...",
+//   "startsAt": "2026-08-12T18:00:00.000Z" | null,
+//   "venueArea": "SoMa" | null,
+//   "lat": 37.7817, "lng": -122.4039,
+//   "expectedAttendance": 120 | null,
+//   "attendanceBasis": "observed" | "estimated" | "prepared",
+//   "stack": ["Python", "Postgres"],
+//   "communityIds": ["com-sfpython"],    // deben existir en sf-communities.json
+//   "organizerIds": ["org-..."],         // deben existir en sf-organizers.json
+//   "sponsorTiers": [{ "name": "Gold", "priceUsd": 2500 }],  // priceUsd puede ser null
+//   "knownSponsors": [],
+//   "pastThemes": [],
+//   "evidenceIds": ["ev-..."]
+// }
+[]

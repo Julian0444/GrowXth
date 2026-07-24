@@ -3,7 +3,11 @@
 import { useEffect, useRef, useState, type ReactNode } from "react"
 import { ArrowRight, X } from "lucide-react"
 import type { MarketComparison, Opportunity, OpportunityMetrics, SourceReference } from "@/lib/api/types"
+import type { Evidence, Play, Reason } from "@/lib/contracts/growxth"
 import { CampaignPanel } from "./campaign-panel"
+import { ConfidenceBars } from "./confidence-bars"
+import { EvidenceLinks } from "./evidence-links"
+import { PlayHeadline } from "./play-headline"
 
 // Línea de auditoría del response (§10): searchId + generatedAt reales.
 export type SearchMeta = { searchId: string; generatedAt: string }
@@ -65,6 +69,13 @@ export function OpportunityDrawer({
   onGenerateCampaign,
   onBackToOpportunity,
   onToast,
+  // Props NUEVAS opcionales (aditivas): alimentan los 3 componentes nuevos con
+  // datos del contrato nuevo. Ausentes → el drawer se comporta igual que antes.
+  play,
+  evidence,
+  evidenceReasons,
+  liveConfidence,
+  consensus,
 }: {
   // Contrato §10: el drawer consume Opportunity directamente — cualquier mercado
   // que devuelva el backend se renderiza sin tocar este componente.
@@ -83,6 +94,11 @@ export function OpportunityDrawer({
   onGenerateCampaign: () => void
   onBackToOpportunity: () => void
   onToast: (message: string) => void
+  play?: Play | null
+  evidence?: Record<string, Evidence>
+  evidenceReasons?: Reason[]
+  liveConfidence?: number | null
+  consensus?: number | null
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -157,6 +173,7 @@ export function OpportunityDrawer({
           )}
           {shown && displayed.mode === "opportunity" && (
             <>
+              {play && <PlayHeadline headline={play.headline} />}
               <div className="d-head">
                 <div>
                   <span className="eyebrow">{`${rankLabel(shown.rank)} · ${shown.country}`}</span>
@@ -183,6 +200,10 @@ export function OpportunityDrawer({
                 <span className="val">{shown.confidence}%</span>
               </div>
 
+              {liveConfidence != null && (
+                <ConfidenceBars confidence={liveConfidence} consensus={consensus ?? null} />
+              )}
+
               <p className="d-rec">{shown.recommendation}</p>
 
               <div className="d-section">
@@ -196,6 +217,13 @@ export function OpportunityDrawer({
                       <b>{reason.label}</b> — {reason.explanation}{" "}
                       {reason.sourceLabel && <span className="src">{reason.sourceLabel}</span>}
                     </p>
+                  </div>
+                ))}
+                {/* Aditivo: evidencia resuelta por razón del contrato nuevo. */}
+                {evidenceReasons?.map((r, i) => (
+                  <div className="reason reason-evidence" key={`ev-reason-${i}`}>
+                    <p className="txt">{r.text}</p>
+                    <EvidenceLinks evidenceIds={r.evidenceIds} evidence={evidence ?? {}} />
                   </div>
                 ))}
               </div>
