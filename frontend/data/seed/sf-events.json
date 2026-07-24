@@ -9,7 +9,9 @@
     "lng": -122.3964097005456,
     "expectedAttendance": 81,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-7M7LSTzslDBDf2q"
     ],
@@ -35,7 +37,9 @@
     "lng": -122.3947382780168,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-ZnJ6GeVoFDvKJ6d"
     ],
@@ -60,7 +64,9 @@
     "lng": -122.45230453867019,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-0tIf4upYDI4nFdU"
     ],
@@ -83,7 +89,9 @@
     "lng": -122.39732630820502,
     "expectedAttendance": 119,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-MvY3wcADGCzQG99"
     ],
@@ -109,7 +117,9 @@
     "lng": -122.43156559324187,
     "expectedAttendance": 349,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-iHkz5obZdong4ta"
     ],
@@ -132,7 +142,10 @@
     "lng": -122.4121379,
     "expectedAttendance": 110,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture",
+      "Climate"
+    ],
     "communityIds": [
       "com-cal-q9Cj6GnWMj0GOQN"
     ],
@@ -154,7 +167,9 @@
     "lng": -122.41376670000001,
     "expectedAttendance": 477,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-NvPPK5ZaAbxLBku"
     ],
@@ -176,7 +191,9 @@
     "lng": -122.38850609487754,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-bEOctOVHDnOtP94"
     ],
@@ -205,7 +222,10 @@
     "lng": -122.4082452,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI",
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-twiOosdGMMY66DI"
     ],
@@ -228,7 +248,9 @@
     "lng": -122.4424246,
     "expectedAttendance": 184,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Fitness"
+    ],
     "communityIds": [
       "com-cal-JDvWKGO7IFEV3WY"
     ],
@@ -253,7 +275,9 @@
     "lng": -122.3965957,
     "expectedAttendance": 6,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Food & Drink"
+    ],
     "communityIds": [
       "com-cal-CQAkwShtOePL4k6"
     ],
@@ -275,7 +299,10 @@
     "lng": -122.4082452,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI",
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-twiOosdGMMY66DI"
     ],
@@ -297,7 +324,9 @@
     "lng": -122.39964758900324,
     "expectedAttendance": 247,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-AvTDahBtRC1OBmy"
     ],
@@ -324,7 +353,10 @@
     "lng": -122.4082452,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture",
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-twiOosdGMMY66DI"
     ],
@@ -348,7 +380,9 @@
     "lng": -122.4039875012858,
     "expectedAttendance": 411,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-ekQAKmcFNMfekOa"
     ],
@@ -400,7 +434,9 @@
     "lng": -122.39616559999999,
     "expectedAttendance": 195,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-AEyGkzYYOkZDLHO"
     ],
@@ -424,7 +460,9 @@
     "lng": -122.40595082764887,
     "expectedAttendance": 280,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-p3GjBJZBKenfkIB"
     ],
@@ -450,7 +488,9 @@
     "lng": -122.43273828588976,
     "expectedAttendance": 103,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-1cPqxnoGqUHzp4n"
     ],
@@ -476,7 +516,10 @@
     "lng": -122.40446019999999,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Food & Drink",
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-AJpfQVFYtwnIIBy"
     ],
@@ -501,7 +544,9 @@
     "lng": -122.41686975115287,
     "expectedAttendance": 241,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-KR8EukYxbUOhVlI"
     ],
@@ -525,7 +570,9 @@
     "lng": -122.4183940049446,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-mdEwCbO9zZBtrtm"
     ],
@@ -547,7 +594,9 @@
     "lng": -122.39714674147511,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-3IZWwu6CG6UBMSY"
     ],
@@ -573,7 +622,9 @@
     "lng": -122.40153759592502,
     "expectedAttendance": 125,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-Cj9mMU4rSQva1HA"
     ],
@@ -598,7 +649,9 @@
     "lng": -122.39672596918106,
     "expectedAttendance": 70,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-jCNsZwbw4pMKSyq"
     ],
@@ -622,7 +675,9 @@
     "lng": -122.39299874186096,
     "expectedAttendance": 7,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-vdXm0JjsktSBH1G"
     ],
@@ -644,7 +699,9 @@
     "lng": -122.40122263783394,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-jHBRQhJKHYv5YxR"
     ],
@@ -673,7 +730,9 @@
     "lng": -122.3879397,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-042729IopxZFVjX"
     ],
@@ -695,7 +754,9 @@
     "lng": -122.41025880982444,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-oIZPahIoFd6iaKQ"
     ],
@@ -721,7 +782,9 @@
     "lng": -122.39744179999998,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-kMvLXquEARGd6nF"
     ],
@@ -745,7 +808,9 @@
     "lng": -122.3912089,
     "expectedAttendance": 302,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-6z3L0pAiEtqyMks"
     ],
@@ -768,7 +833,9 @@
     "lng": -122.3932181598894,
     "expectedAttendance": 8,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-HHEMp6GVYq3TMfo"
     ],
@@ -794,7 +861,9 @@
     "lng": -122.47767078963795,
     "expectedAttendance": 281,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-apuuQlzSJIo1CMm"
     ],
@@ -818,7 +887,9 @@
     "lng": -122.4053026,
     "expectedAttendance": 81,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-XJxg98XtByKAGjf"
     ],
@@ -842,7 +913,9 @@
     "lng": -122.4029183,
     "expectedAttendance": 154,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-Z1tslEBMjjCh4fd"
     ],
@@ -865,7 +938,9 @@
     "lng": -122.39966,
     "expectedAttendance": 145,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-5lEO8gQBzXbMAaz"
     ],
@@ -888,7 +963,9 @@
     "lng": -122.40359088666929,
     "expectedAttendance": 259,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-MJ28KU4lOJNFNHk"
     ],
@@ -911,7 +988,9 @@
     "lng": -122.39651984364899,
     "expectedAttendance": 241,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-l76607AsonZ1F7F"
     ],
@@ -934,7 +1013,9 @@
     "lng": -122.3937160956817,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-eVOUMFnNFfbK0GA"
     ],
@@ -961,7 +1042,10 @@
     "lng": -122.41600653816647,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture",
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-HzDHcHBkrtMwjz3"
     ],
@@ -991,7 +1075,9 @@
     "lng": -122.42051374524527,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-4g8MKXGW8nmoHby"
     ],
@@ -1020,7 +1106,9 @@
     "lng": -122.4176365,
     "expectedAttendance": 45,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-jDbO209E2P3v2a5"
     ],
@@ -1042,7 +1130,9 @@
     "lng": -122.47492883392079,
     "expectedAttendance": 80,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-vH0avsiSKkbUthy"
     ],
@@ -1067,7 +1157,9 @@
     "lng": -122.3980268418913,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-l76607AsonZ1F7F"
     ],
@@ -1090,7 +1182,10 @@
     "lng": -122.38957632859355,
     "expectedAttendance": 229,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI",
+      "Crypto"
+    ],
     "communityIds": [
       "com-cal-et9nkgABzLtUrY1"
     ],
@@ -1112,7 +1207,9 @@
     "lng": -122.3913852,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-0PTpqBeMiEgEobj"
     ],
@@ -1136,7 +1233,10 @@
     "lng": -122.41850269999999,
     "expectedAttendance": 33,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI",
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-ajrtY4rkzYgJSAG"
     ],
@@ -1158,7 +1258,9 @@
     "lng": -122.43437339740287,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-kcWhMbIs2X0Y2Xb"
     ],
@@ -1180,7 +1282,9 @@
     "lng": -122.42253397430085,
     "expectedAttendance": 209,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-tFAzNGOZ9xn6kT2"
     ],
@@ -1207,7 +1311,9 @@
     "lng": -122.43078310000001,
     "expectedAttendance": 38,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-oQwYP8yc3avSAyy"
     ],
@@ -1229,7 +1335,9 @@
     "lng": -122.46057089999998,
     "expectedAttendance": 197,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-tbMJl6lsQGYYSrq"
     ],
@@ -1251,7 +1359,9 @@
     "lng": -122.40487819999998,
     "expectedAttendance": 328,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-gmMOid1Rsqc3Hih"
     ],
@@ -1273,7 +1383,9 @@
     "lng": -122.4214133,
     "expectedAttendance": 1116,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-Z1tslEBMjjCh4fd"
     ],
@@ -1296,7 +1408,10 @@
     "lng": -122.42604449999999,
     "expectedAttendance": 19,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture",
+      "Climate"
+    ],
     "communityIds": [
       "com-cal-ahTi4ptrN9WCYkg"
     ],
@@ -1320,7 +1435,9 @@
     "lng": -122.4072161,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-qRQSPj2xdR4Gmsl"
     ],
@@ -1342,7 +1459,9 @@
     "lng": -122.38569439999998,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-aXdtH9ebHo9YaLg"
     ],
@@ -1364,7 +1483,9 @@
     "lng": -122.40429400000001,
     "expectedAttendance": 171,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-uKIESE8ZcmyWvV5"
     ],
@@ -1388,7 +1509,9 @@
     "lng": -122.44965801116359,
     "expectedAttendance": 12,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-mmnYmrfNgxGdvQb"
     ],
@@ -1410,7 +1533,9 @@
     "lng": -122.46046941170908,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-XSX7oXHEkUHxWCP"
     ],
@@ -1434,7 +1559,10 @@
     "lng": -122.4483494,
     "expectedAttendance": 136,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI",
+      "Arts & Culture"
+    ],
     "communityIds": [
       "com-cal-OxtoGmVyzIOzSBu"
     ],
@@ -1459,7 +1587,9 @@
     "lng": -122.4122946,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-Y6pdxYhx9E8Arc8"
     ],
@@ -1485,7 +1615,9 @@
     "lng": -122.3856944,
     "expectedAttendance": 220,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "AI"
+    ],
     "communityIds": [
       "com-cal-DcJSjTzVhNCxcwK"
     ],
@@ -1512,7 +1644,10 @@
     "lng": -122.41600875753585,
     "expectedAttendance": 10,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Arts & Culture",
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-gnzsB4Zxk1YkG0m"
     ],
@@ -1534,7 +1669,9 @@
     "lng": -122.4324219067364,
     "expectedAttendance": 0,
     "attendanceBasis": "observed",
-    "stack": [],
+    "stack": [
+      "Tech"
+    ],
     "communityIds": [
       "com-cal-PVfhSUgLiiaGDmZ"
     ],

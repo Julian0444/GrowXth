@@ -44,7 +44,15 @@ USER_AGENT = "GrowXth-Scraper/1.0 (+https://github.com/growxth; contact: mcavali
 
 ROOT = Path(__file__).resolve().parent.parent
 RAW_PATH = ROOT / "data" / "raw" / "luma-sf.json"
+DETAILS_PATH = ROOT / "data" / "raw" / "luma-sf-details.json"
 SEED_DIR = ROOT / "frontend" / "data" / "seed"
+
+# Keywords para derivar stack cuando el evento no trae categories. Se buscan
+# como palabra/substring sobre name + description (case-insensitive).
+STACK_KEYWORDS = [
+    "python", "ai", "agent", "llm", "rust", "infra", "devtools",
+    "hackathon", "engineer", "data", "backend", "crypto", "security",
+]
 
 # Bounding boxes aproximados de barrios de SF (lat_min, lat_max, lng_min, lng_max).
 # Si un evento no cae en ninguno, venueArea queda null (no se inventa).
@@ -91,19 +99,12 @@ def dig(obj, *candidate_paths, default=None):
 # --------------------------------------------------------------------------- #
 # FASE 1 — extracción cruda
 # --------------------------------------------------------------------------- #
-def _request_page(client, cursor):
-    """Una página con retries + backoff en 429/5xx. Devuelve el JSON de la resp."""
-    params = {
-        "discover_place_api_id": SF_PLACE_API_ID,
-        "pagination_limit": PAGINATION_LIMIT,
-    }
-    if cursor:
-        params["pagination_cursor"] = cursor
-
+def _get_with_retries(client, path, params):
+    """GET con retries + backoff en 429/5xx. Devuelve el JSON de la respuesta."""
     last_error = None
     for attempt in range(MAX_RETRIES):
         try:
-            resp = client.get(ENDPOINT, params=params)
+            resp = client.get(path, params=params)
         except httpx.HTTPError as exc:
             last_error = exc
             backoff = 2 ** attempt
@@ -122,7 +123,18 @@ def _request_page(client, cursor):
         resp.raise_for_status()
         return resp.json()
 
-    raise RuntimeError(f"page falló tras {MAX_RETRIES} intentos: {last_error}")
+    raise RuntimeError(f"request a {path} falló tras {MAX_RETRIES} intentos: {last_error}")
+
+
+def _request_page(client, cursor):
+    """Una página del discover paginado."""
+    params = {
+        "discover_place_api_id": SF_PLACE_API_ID,
+        "pagination_limit": PAGINATION_LIMIT,
+    }
+    if cursor:
+        params["pagination_cursor"] = cursor
+    return _get_with_retries(client, ENDPOINT, params)
 
 
 def phase1():
@@ -170,8 +182,102 @@ def phase1():
 
 
 # --------------------------------------------------------------------------- #
+# FASE 1b — enriquecer por evento (GET /event/get)
+# --------------------------------------------------------------------------- #
+def phase1b():
+    events_file = SEED_DIR / "sf-events.json"
+    if not events_file.exists():
+        print(f"Falta {events_file}. Corré phase1 + phase2 primero.", file=sys.stderr)
+        sys.exit(1)
+
+    events = json.loads(events_file.read_text(encoding="utf-8"))
+    # El id es "evt-{api_id}"; recuperamos el api_id sacando el primer "evt-".
+    api_ids = [e["id"][len("evt-"):] for e in events if isinstance(e.get("id"), str)]
+    print(f"Enriqueciendo {len(api_ids)} eventos vía /event/get …")
+
+    details = {}
+    headers = {"User-Agent": USER_AGENT, "Accept": "application/json"}
+    with httpx.Client(base_url=API_BASE, headers=headers, timeout=30.0) as client:
+        for i, api_id in enumerate(api_ids, 1):
+            data = _get_with_retries(client, "/event/get", {"event_api_id": api_id})
+            details[api_id] = data
+            if i % 10 == 0 or i == len(api_ids):
+                print(f"  {i}/{len(api_ids)}")
+            if i < len(api_ids):
+                time.sleep(RATE_LIMIT_SECONDS)
+
+    DETAILS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "source": API_BASE + "/event/get",
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "count": len(details),
+        "details": details,
+    }
+    DETAILS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\nCrudo volcado a {DETAILS_PATH} ({len(details)} detalles)")
+
+    if details:
+        first = next(iter(details.values()))
+        print("\nKEYS de la primera respuesta /event/get:")
+        if isinstance(first, dict):
+            for key, value in first.items():
+                print(f"  {key}: {type(value).__name__}")
+        else:
+            print(f"  (respuesta no es dict, es {type(first).__name__})")
+
+
+# --------------------------------------------------------------------------- #
 # FASE 2 — normalización al contrato
 # --------------------------------------------------------------------------- #
+def keyword_stack(*texts):
+    """Deriva stack por keywords sobre los textos dados. [] si no matchea nada."""
+    blob = " ".join(t for t in texts if isinstance(t, str)).lower()
+    return [kw for kw in STACK_KEYWORDS if kw in blob]
+
+
+def flatten_prosemirror(node, out=None):
+    """Aplana el texto de un doc ProseMirror (description_mirror) a un string."""
+    if out is None:
+        out = []
+    if isinstance(node, dict):
+        if node.get("type") == "text" and isinstance(node.get("text"), str):
+            out.append(node["text"])
+        for child in node.get("content", []) or []:
+            flatten_prosemirror(child, out)
+    elif isinstance(node, list):
+        for child in node:
+            flatten_prosemirror(child, out)
+    return " ".join(out)
+
+
+def load_details():
+    """Mapa api_id → respuesta de /event/get. {} si no existe el archivo."""
+    if not DETAILS_PATH.exists():
+        return {}
+    raw = json.loads(DETAILS_PATH.read_text(encoding="utf-8"))
+    return raw.get("details", {}) if isinstance(raw, dict) else {}
+
+
+def extract_detail_fields(detail):
+    """Campos de enriquecimiento de /event/get, con dig (paths no documentados).
+
+    Nota verificada contra la respuesta real: capacity, subscriber_count y
+    event_count NO los expone /event/get (0/64) → quedan null. categories viene
+    top-level; la descripción vive en description_mirror (ProseMirror).
+    """
+    return {
+        "capacity": dig(detail, "event.capacity", "capacity", "data.event.capacity"),
+        "categories": normalize_categories(
+            dig(detail, "categories", "event.categories", "event.tags", "data.event.categories", default=[])
+        ),
+        "description": flatten_prosemirror(
+            dig(detail, "description_mirror", "event.description_mirror", "event.description")
+        ),
+        "subscriber_count": dig(detail, "calendar.subscriber_count", "event.calendar.subscriber_count",
+                                "calendar.membership_count", "data.calendar.subscriber_count"),
+        "event_count": dig(detail, "calendar.event_count", "event.calendar.event_count",
+                           "data.calendar.event_count"),
+    }
 def slugify(text):
     slug = re.sub(r"[^a-z0-9]+", "-", (text or "").strip().lower()).strip("-")
     return slug or "unknown"
@@ -278,6 +384,7 @@ def phase2():
 
     raw = json.loads(RAW_PATH.read_text(encoding="utf-8"))
     entries = raw.get("entries", []) if isinstance(raw, dict) else raw
+    details = load_details()  # {} si no se corrió phase1b
 
     events = []
     communities = {}
@@ -322,6 +429,14 @@ def phase2():
         seen_api_ids.add(api_id)
         event_id = f"evt-{api_id}"
 
+        # Enriquecimiento de phase1b (si existe el detalle para este api_id).
+        d = extract_detail_fields(details.get(api_id, {}))
+
+        # stack ← categories si vienen; si no, derivado por keywords sobre
+        # name + description. Sin match → [] (se va al fondo del ranking).
+        cats = d["categories"] or f["categories"]
+        event_stack = cats if cats else keyword_stack(f["name"], d["description"])
+
         # ---- Organizers (hosts) ----
         host_org_ids = []
         for host in f["hosts"]:
@@ -357,22 +472,31 @@ def phase2():
                     "url": f"https://lu.ma/{cal_slug}" if isinstance(cal_slug, str) and cal_slug else "",
                     "kind": "meetup-series",
                     "cadence": None,
-                    "eventsRun12mo": f["event_count"],
+                    "eventsRun12mo": d["event_count"] if d["event_count"] is not None else f["event_count"],
                     "foundedYear": None,
-                    "sizeEstimate": f["subscriber_count"],
+                    "sizeEstimate": d["subscriber_count"] if d["subscriber_count"] is not None else f["subscriber_count"],
                     "sizeBasis": "observed",
                     "stack": [],
                     "organizerIds": [],
                     "pastSponsors": [],
                     "evidenceIds": [],
                 }
+            else:
+                # Comunidad ya creada por otro evento: completar counts si estaban null.
+                com = communities[com_id]
+                if com["sizeEstimate"] is None and d["subscriber_count"] is not None:
+                    com["sizeEstimate"] = d["subscriber_count"]
+                if com["eventsRun12mo"] is None and d["event_count"] is not None:
+                    com["eventsRun12mo"] = d["event_count"]
             for org_id in host_org_ids:
                 if org_id not in communities[com_id]["organizerIds"]:
                     communities[com_id]["organizerIds"].append(org_id)
                 if com_id not in organizers[org_id]["communityIds"]:
                     organizers[org_id]["communityIds"].append(com_id)
 
-        expected_attendance = f["capacity"] if f["capacity"] is not None else f["guest_count"]
+        # expectedAttendance ← capacity si viene (de phase1b); si no, guest_count.
+        capacity = d["capacity"] if d["capacity"] is not None else f["capacity"]
+        expected_attendance = capacity if capacity is not None else f["guest_count"]
 
         events.append({
             "id": event_id,
@@ -385,7 +509,7 @@ def phase2():
             "expectedAttendance": expected_attendance,
             # observed solo si Luma dio un número real; si no, estimated.
             "attendanceBasis": "observed" if expected_attendance is not None else "estimated",
-            "stack": f["categories"],
+            "stack": event_stack,
             "communityIds": community_ids,
             "organizerIds": host_org_ids,
             "sponsorTiers": [],
@@ -413,10 +537,12 @@ def _write_json(path, data):
 # --------------------------------------------------------------------------- #
 def main():
     parser = argparse.ArgumentParser(description="Scraper de eventos de Luma (SF).")
-    parser.add_argument("phase", choices=["phase1", "phase2"], help="fase a correr")
+    parser.add_argument("phase", choices=["phase1", "phase1b", "phase2"], help="fase a correr")
     args = parser.parse_args()
     if args.phase == "phase1":
         phase1()
+    elif args.phase == "phase1b":
+        phase1b()
     else:
         phase2()
 
