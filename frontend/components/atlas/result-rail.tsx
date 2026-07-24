@@ -116,6 +116,9 @@ export function ResultRail({
         >
           <span className="rk mono">{String(opportunity.rank).padStart(2, "0")}</span>
           <span className="nm">{opportunity.city}</span>
+          {opportunity.distanceMiles != null && (
+            <span className="dist mono">{`${opportunity.distanceMiles} mi`}</span>
+          )}
           <span className="sc mono">{opportunity.score}</span>
         </button>
       ))}

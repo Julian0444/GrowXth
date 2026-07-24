@@ -2,7 +2,6 @@
 
 import type { FormEvent, ReactNode, RefObject } from "react"
 import { Search } from "lucide-react"
-import { DEMO_QUERY } from "@/lib/demo/fixtures"
 
 // Chips de interpretación (§5, máximo 3) — vienen de la respuesta real
 // (SearchResponse.interpretation + budget del request), no de un hardcode.
@@ -29,7 +28,8 @@ export function SearchCommand({
 }) {
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const query = value.trim() || DEMO_QUERY
+    const query = value.trim()
+    if (!query) return
     onValueChange(query)
     onSearch(query)
   }

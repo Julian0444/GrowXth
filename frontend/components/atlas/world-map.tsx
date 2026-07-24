@@ -1,7 +1,7 @@
 "use client"
 
 import { memo } from "react"
-import { ComposableMap, Geographies, Geography } from "react-simple-maps"
+import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps"
 import type { AtlasCamera } from "@/hooks/use-atlas-camera"
 import type { Opportunity } from "@/lib/api/types"
 import { MAP_HEIGHT, MAP_WIDTH, PROJECTION_CENTER, PROJECTION_SCALE } from "@/lib/atlas/signal-layout"
@@ -54,6 +54,7 @@ export const WorldMap = memo(function WorldMap({
   selectedId,
   hoveredId,
   timeRange,
+  userLocation,
   onSelect,
   onHover,
 }: {
@@ -64,6 +65,7 @@ export const WorldMap = memo(function WorldMap({
   selectedId: string | null
   hoveredId: string | null
   timeRange: string
+  userLocation: [number, number] | null
   onSelect: (id: string) => void
   onHover: (id: string | null) => void
 }) {
@@ -98,6 +100,15 @@ export const WorldMap = memo(function WorldMap({
             hintId={hoveredId}
             timeRange={timeRange}
           />
+          {userLocation && (
+            <Marker coordinates={userLocation}>
+              <g className="user-location" aria-label="Location shared through Linq">
+                <circle className="pulse" r={12} />
+                <circle className="ring" r={6} />
+                <circle className="core" r={2.5} />
+              </g>
+            </Marker>
+          )}
           {results.map((opportunity) => (
             <OpportunityMarker
               key={opportunity.id}

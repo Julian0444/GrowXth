@@ -384,7 +384,8 @@ def phase2():
 
     raw = json.loads(RAW_PATH.read_text(encoding="utf-8"))
     entries = raw.get("entries", []) if isinstance(raw, dict) else raw
-    details = load_details()  # {} si no se corrió phase1b
+    details_raw = json.loads(DETAILS_PATH.read_text(encoding="utf-8")) if DETAILS_PATH.exists() else {}
+    details = details_raw.get("details", {}) if isinstance(details_raw, dict) else {}
 
     events = []
     communities = {}
@@ -522,6 +523,14 @@ def phase2():
     _write_json(SEED_DIR / "sf-events.json", events)
     _write_json(SEED_DIR / "sf-communities.json", list(communities.values()))
     _write_json(SEED_DIR / "sf-organizers.json", list(organizers.values()))
+    _write_json(SEED_DIR / "sf-source-meta.json", {
+        "source": raw.get("source", API_BASE + ENDPOINT) if isinstance(raw, dict) else API_BASE + ENDPOINT,
+        "fetchedAt": (
+            details_raw.get("fetched_at")
+            or (raw.get("fetched_at") if isinstance(raw, dict) else None)
+            or datetime.now(timezone.utc).isoformat()
+        ),
+    })
 
     print(f"Escritos en {SEED_DIR}:")
     print(f"  sf-events.json       {len(events)}")

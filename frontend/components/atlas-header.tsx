@@ -11,7 +11,7 @@ export function AtlasHeader({ view, onReset }: { view: AtlasViewState; onReset: 
         className="brand"
         type="button"
         title="GrowXth"
-        aria-label="GrowXth — reset demo"
+        aria-label="GrowXth — start a new search"
         onClick={() => {
           if (view !== "idle") onReset()
         }}
@@ -36,7 +36,7 @@ export function AtlasHeader({ view, onReset }: { view: AtlasViewState; onReset: 
       {resettable && (
         <div className="header-right">
           <button className="reset-btn" type="button" onClick={onReset}>
-            Restart demo
+            New search
           </button>
         </div>
       )}

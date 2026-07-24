@@ -55,9 +55,10 @@ function scoreAccess(c: Community): number | null {
   return clamp01((hasOrganizers ? 0.5 : 0) + (acceptsSponsors ? 0.5 : 0));
 }
 
-function scoreExclusivityGap(c: Community): number {
-  // Menos sponsors conocidos = más whitespace para ser EL sponsor.
-  // Nunca null: pastSponsors es un array concreto; vacío = alto gap a propósito.
+function scoreExclusivityGap(c: Community): number | null {
+  // Ausencia de sponsors en el seed no prueba ausencia en el mundo.
+  // Solo puntuamos whitespace cuando existe al menos un sponsor observado.
+  if (c.pastSponsors.length === 0) return null;
   return clamp01(1 / (1 + c.pastSponsors.length));
 }
 
@@ -94,9 +95,9 @@ export function scoreCommunity(input: CommunityScoreInput): CommunityScoreResult
   if (support.length > 0) {
     if (breakdown.stackOverlap != null && breakdown.stackOverlap >= 0.5) {
       reasons.push({
-        text: `El stack de ${community.name} cubre ${Math.round(
+        text: `${community.name}'s stack covers ${Math.round(
           breakdown.stackOverlap * 100,
-        )}% del ICP.`,
+        )}% of the requested builder profile.`,
         evidenceIds: support,
       });
     }
@@ -106,16 +107,13 @@ export function scoreCommunity(input: CommunityScoreInput): CommunityScoreResult
       community.eventsRun12mo != null
     ) {
       reasons.push({
-        text: `Cadencia corrida de verdad: ${community.eventsRun12mo} eventos en 12 meses.`,
+        text: `Observed cadence: ${community.eventsRun12mo} events run in the last 12 months.`,
         evidenceIds: support,
       });
     }
     if (breakdown.exclusivityGap != null && breakdown.exclusivityGap >= 0.5) {
       reasons.push({
-        text:
-          community.pastSponsors.length === 0
-            ? `Sin sponsors conocidos — espacio abierto para ser el primero.`
-            : `Pocos sponsors previos (${community.pastSponsors.length}) — hay whitespace.`,
+        text: `Only ${community.pastSponsors.length} prior sponsor${community.pastSponsors.length === 1 ? '' : 's'} observed, leaving room to stand out.`,
         evidenceIds: support,
       });
     }

@@ -1,9 +1,18 @@
 "use client"
 
-import { SEARCH_STAGES } from "@/lib/api/demo-adapter"
+// Etapas mostradas durante la búsqueda — copy de UI (§5). El avance es un
+// ticker cosmético del shell mientras la request real está en vuelo: la última
+// etapa queda "en curso" hasta que el backend responde (nunca porcentajes
+// inventados ni completado ficticio).
+export const SEARCH_STAGES = [
+  { id: "understanding", label: "Understanding your product" },
+  { id: "matching", label: "Matching technical communities" },
+  { id: "events", label: "Finding relevant events" },
+  { id: "ranking", label: "Ranking San Francisco growth plays" },
+] as const
 
-// Pasos §5 guiados por el stage REAL del request (RequestState.loading.stage):
-// el overlay no tiene timers propios — nunca porcentajes inventados.
+export type SearchStageId = (typeof SEARCH_STAGES)[number]["id"]
+
 // stageIndex: índice del paso en curso; SEARCH_STAGES.length = todos completos
 // (fade-out tras éxito); -1 = ninguno resaltado (fade-out tras error).
 export function AnalysisOverlay({ active, stageIndex }: { active: boolean; stageIndex: number }) {

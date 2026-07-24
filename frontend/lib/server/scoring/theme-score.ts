@@ -16,7 +16,7 @@ import type {
   Theme,
   ThemeBreakdown,
 } from '@/lib/contracts/growxth';
-import { avg, clamp01, coverageRatio, weightedScore } from './score-utils.ts';
+import { clamp01, coverageRatio, weightedScore } from './score-utils.ts';
 
 export const THEME_WEIGHTS: Record<keyof ThemeBreakdown, number> = {
   momentum: 0.3,
@@ -85,16 +85,16 @@ export function scoreTheme(input: ThemeScoreInput): ThemeScoreResult {
     if (breakdown.momentum != null && breakdown.momentum >= 0.4) {
       const pct =
         theme.githubMomentum != null
-          ? `${Math.round((theme.githubMomentum - 1) * 100)}% en GitHub (90d)`
-          : `alta saliencia en prensa/CFPs`;
+          ? `${Math.round((theme.githubMomentum - 1) * 100)}% on GitHub over 90 days`
+          : `high visibility in public news and CFPs`;
       reasons.push({
-        text: `Momentum del tema "${theme.label}": ${pct}.`,
+        text: `Momentum for "${theme.label}": ${pct}.`,
         evidenceIds: support,
       });
     }
     if (breakdown.saturationGap != null && breakdown.saturationGap >= 0.5) {
       reasons.push({
-        text: `Baja saturación en SF (${theme.saturationSF} eventos en 180d) — espacio para dueñar "${theme.label}".`,
+        text: `Low SF saturation (${theme.saturationSF} events in 180 days) leaves room to own "${theme.label}".`,
         evidenceIds: support,
       });
     }
@@ -103,7 +103,7 @@ export function scoreTheme(input: ThemeScoreInput): ThemeScoreResult {
       breakdown.communityCapability >= 0.5
     ) {
       reasons.push({
-        text: `${community.name} tiene el stack para correr un evento de "${theme.label}".`,
+        text: `${community.name} has the capabilities to run a "${theme.label}" activation.`,
         evidenceIds: support,
       });
     }

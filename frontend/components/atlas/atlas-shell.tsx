@@ -5,8 +5,12 @@ import { Minus, Plus, RotateCcw } from "lucide-react"
 import { AtlasHeader } from "@/components/atlas-header"
 import { useAtlasCamera, type ZoomBand } from "@/hooks/use-atlas-camera"
 import { useReducedMotion } from "@/hooks/use-reduced-motion"
-import { ingestEvent } from "@/lib/api/atlas-client"
-import { searchOpportunities, SEARCH_STAGES } from "@/lib/api/demo-adapter"
+import {
+  fetchSharedLinqSearch,
+  ingestEvent,
+  searchOpportunities,
+} from "@/lib/api/atlas-client"
+import { toLegacyShape } from "@/lib/api/opportunity-adapter"
 import type {
   DataCoverage,
   Opportunity,
@@ -14,12 +18,11 @@ import type {
   SearchRequest,
   SearchResponse,
 } from "@/lib/api/types"
+import type { SearchRequest as WireSearchRequest } from "@/lib/contracts/growxth"
 import type { AtlasLayer, TimeRange } from "@/lib/atlas-data"
 import { cityFrame, FRAME_IDLE, resultsFrame, ZOOM_STEP } from "@/lib/atlas/camera"
 import { projectCity } from "@/lib/atlas/signal-layout"
-import { DEMO_QUERY } from "@/lib/demo/fixtures"
-import { PREPARED_INGEST, PREPARED_INGEST_URL } from "@/lib/demo/ingest-fixture"
-import { AnalysisOverlay } from "./analysis-overlay"
+import { AnalysisOverlay, SEARCH_STAGES } from "./analysis-overlay"
 import { EventImport, INGEST_IDLE, type IngestUiState } from "./event-import"
 import { LAYER_ORDER, LayerControls } from "./layer-controls"
 import { OnboardingIntake, type IntakePayload } from "./onboarding-intake"
@@ -33,8 +36,8 @@ import { WorldMap } from "./world-map"
 export type AtlasViewState = "idle" | "analyzing" | "results" | "selected" | "campaign"
 
 // Máquina de estados central (§7) — nada de useState sueltos para view state.
-// Desde el Bloque 3 el request vive acá como RequestState real (§10).
-// La selección es un id string genérico: cualquier mercado del backend.
+// El request vive acá como RequestState real (§10). La selección es un id
+// string genérico: cualquier mercado que devuelva el backend.
 type AtlasState = {
   view: AtlasViewState
   searchText: string
@@ -43,9 +46,6 @@ type AtlasState = {
   request: RequestState
   response: SearchResponse | null
   results: Opportunity[]
-  // "Use prepared demo" (§10): una vez activado, toda búsqueda siguiente va a
-  // los fixtures — la presentación no vuelve a depender del backend.
-  demoMode: boolean
   selectedId: string | null
   // Retiene el último mercado para que el contenido del panel no "pope" al cerrar.
   lastId: string | null
@@ -58,9 +58,8 @@ type AtlasAction =
   | { type: "QUERY_CHANGED"; text: string }
   | { type: "SEARCH_STARTED"; query: string; request: SearchRequest }
   | { type: "SEARCH_PROGRESSED"; stage: string }
-  | { type: "SEARCH_SUCCEEDED"; response: SearchResponse }
+  | { type: "SEARCH_SUCCEEDED"; response: SearchResponse; degradedNote?: string }
   | { type: "SEARCH_FAILED"; message: string }
-  | { type: "DEMO_MODE_ENTERED" }
   | { type: "OPPORTUNITY_HOVERED"; id: string | null }
   | { type: "OPPORTUNITY_SELECTED"; id: string }
   | { type: "SELECTION_CLOSED" }
@@ -73,12 +72,11 @@ type AtlasAction =
 const INITIAL_STATE: AtlasState = {
   view: "idle",
   searchText: "",
-  activeQuery: DEMO_QUERY,
+  activeQuery: "",
   searchRequest: null,
   request: { status: "idle" },
   response: null,
   results: [],
-  demoMode: false,
   selectedId: null,
   lastId: null,
   hoveredId: null,
@@ -120,17 +118,16 @@ function atlasReducer(state: AtlasState, action: AtlasAction): AtlasState {
         view: "results",
         response: action.response,
         results: action.response.opportunities,
-        request:
-          coverage.unavailableSources.length > 0
+        request: action.degradedNote
+          ? { status: "partial", message: action.degradedNote }
+          : coverage.unavailableSources.length > 0
             ? { status: "partial", message: partialMessage(coverage) }
             : { status: "success" },
       }
     }
     case "SEARCH_FAILED":
-      // Un error devuelve al intake — el banner (Retry / prepared demo) vive ahí.
+      // Un error devuelve al intake — el banner (con Retry) vive ahí.
       return { ...state, view: "idle", request: { status: "error", message: action.message, retryable: true } }
-    case "DEMO_MODE_ENTERED":
-      return { ...state, demoMode: true }
     case "OPPORTUNITY_HOVERED":
       return state.hoveredId === action.id ? state : { ...state, hoveredId: action.id }
     case "OPPORTUNITY_SELECTED":
@@ -155,7 +152,6 @@ function atlasReducer(state: AtlasState, action: AtlasAction): AtlasState {
         ...INITIAL_STATE,
         layers: state.layers,
         timeRange: state.timeRange,
-        demoMode: state.demoMode,
       }
   }
 }
@@ -184,10 +180,21 @@ function projectResults(opportunities: readonly Opportunity[]): Array<[number, n
   return opportunities.map((item) => projectCity(item.coordinates[0], item.coordinates[1]))
 }
 
+// Traducción al contrato del backend (growxth.ts). El objetivo "talent" de la
+// UI se llama "hiring" en el contrato.
+function toWireRequest(request: SearchRequest): WireSearchRequest {
+  return {
+    product: request.query,
+    icpStack: [],
+    budgetUsd: request.budget?.amount ?? 0,
+    goal: request.objective === "talent" ? "hiring" : request.objective,
+    location: request.location,
+  }
+}
+
 // Overrides del intake (objetivo/budget elegidos explícitamente) o retry con el
 // request original; sin overrides, la barra de refinamiento parsea la query.
 type SearchOverrides = {
-  forceDemo?: boolean
   request?: SearchRequest
   objective?: SearchRequest["objective"]
   budget?: SearchRequest["budget"]
@@ -203,7 +210,6 @@ export function AtlasShell() {
     request,
     response,
     results,
-    demoMode,
     selectedId,
     lastId,
     hoveredId,
@@ -218,10 +224,12 @@ export function AtlasShell() {
   const [zoomBand, setZoomBand] = useState<ZoomBand>({ zoomed: false, zoomed2: false })
   const [toast, setToast] = useState<{ message: string; visible: boolean }>({ message: "", visible: false })
   const [ingest, setIngest] = useState<IngestUiState>(INGEST_IDLE)
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null)
 
   const searchInputRef = useRef<HTMLInputElement>(null)
   const toastTimer = useRef<number | null>(null)
   const scanTimer = useRef<number | null>(null)
+  const stageTimer = useRef<number | null>(null)
   // Descartan resoluciones viejas (retry rápido, reset durante el análisis).
   const searchSeq = useRef(0)
   const ingestSeq = useRef(0)
@@ -235,17 +243,24 @@ export function AtlasShell() {
     toastTimer.current = window.setTimeout(() => setToast((current) => ({ ...current, visible: false })), 1800)
   }, [])
 
+  const clearStageTimer = useCallback(() => {
+    if (stageTimer.current !== null) {
+      window.clearInterval(stageTimer.current)
+      stageTimer.current = null
+    }
+  }, [])
+
   useEffect(() => {
     return () => {
       if (toastTimer.current !== null) window.clearTimeout(toastTimer.current)
       if (scanTimer.current !== null) window.clearTimeout(scanTimer.current)
+      if (stageTimer.current !== null) window.clearInterval(stageTimer.current)
     }
   }, [])
 
   const viewRef = useRef(view)
   const layersRef = useRef(layers)
   const timeRangeRef = useRef(timeRange)
-  const demoModeRef = useRef(demoMode)
   const resultsRef = useRef(results)
   const selectedIdRef = useRef(selectedId)
   const searchRequestRef = useRef(searchRequest)
@@ -256,12 +271,11 @@ export function AtlasShell() {
     viewRef.current = view
     layersRef.current = layers
     timeRangeRef.current = timeRange
-    demoModeRef.current = demoMode
     resultsRef.current = results
     selectedIdRef.current = selectedId
     searchRequestRef.current = searchRequest
     ingestUrlRef.current = ingest.url
-  }, [view, layers, timeRange, demoMode, results, selectedId, searchRequest, ingest.url])
+  }, [view, layers, timeRange, results, selectedId, searchRequest, ingest.url])
 
   const runSearch = useCallback(
     (query: string, overrides: SearchOverrides = {}) => {
@@ -276,28 +290,53 @@ export function AtlasShell() {
       }
       dispatch({ type: "SEARCH_STARTED", query, request: builtRequest })
       setLayersOpen(false)
-      // Banda de escaneo §5: 1.05s × 2 (el prototipo la retira a los 2200ms).
+      // Banda de escaneo §5: 1.05s × 2 (se retira sola a los 2200ms).
       if (!reducedMotion) {
         setScanning(true)
         if (scanTimer.current !== null) window.clearTimeout(scanTimer.current)
         scanTimer.current = window.setTimeout(() => setScanning(false), 2200)
       }
-      searchOpportunities(builtRequest, {
-        stageMs: reducedMotion ? 60 : 460,
-        tailMs: reducedMotion ? 0 : 180,
-        forceDemo: overrides.forceDemo || demoModeRef.current,
-        onStage: (stageId) => {
-          if (searchSeq.current === seq) dispatch({ type: "SEARCH_PROGRESSED", stage: stageId })
+      // Ticker cosmético de etapas mientras la request real está en vuelo:
+      // avanza hasta la última y queda ahí hasta que el backend responde.
+      clearStageTimer()
+      let stageIndex = 0
+      stageTimer.current = window.setInterval(
+        () => {
+          if (searchSeq.current !== seq) {
+            clearStageTimer()
+            return
+          }
+          if (stageIndex < SEARCH_STAGES.length - 1) {
+            stageIndex += 1
+            dispatch({ type: "SEARCH_PROGRESSED", stage: SEARCH_STAGES[stageIndex].id })
+          }
         },
-      })
-        .then((searchResponse) => {
+        reducedMotion ? 80 : 550,
+      )
+      searchOpportunities(toWireRequest(builtRequest))
+        .then((wireResponse) => {
           if (searchSeq.current !== seq) return
-          dispatch({ type: "SEARCH_SUCCEEDED", response: searchResponse })
+          clearStageTimer()
+          const legacyResponse = toLegacyShape(wireResponse)
+          setUserLocation(
+            wireResponse.locationContext
+              ? [wireResponse.locationContext.lng, wireResponse.locationContext.lat]
+              : null,
+          )
+          dispatch({
+            type: "SEARCH_SUCCEEDED",
+            response: legacyResponse,
+            degradedNote: wireResponse.degraded
+              ? wireResponse.warnings.join(" · ") || "Serving prepared fallback data."
+              : undefined,
+          })
           // Encuadre dinámico: bounding box de los mercados que llegaron.
-          camera.flyTo(resultsFrame(projectResults(searchResponse.opportunities)), 900)
+          camera.flyTo(resultsFrame(projectResults(legacyResponse.opportunities)), 900)
         })
         .catch((error: unknown) => {
+          // atlas-client no lanza en condiciones normales; esto es red de seguridad.
           if (searchSeq.current !== seq) return
+          clearStageTimer()
           setScanning(false)
           if (scanTimer.current !== null) window.clearTimeout(scanTimer.current)
           dispatch({
@@ -306,7 +345,7 @@ export function AtlasShell() {
           })
         })
     },
-    [reducedMotion, camera],
+    [reducedMotion, camera, clearStageTimer],
   )
 
   const launchFromIntake = useCallback(
@@ -317,12 +356,8 @@ export function AtlasShell() {
   )
 
   const retrySearch = useCallback(() => {
-    runSearch(activeQuery || DEMO_QUERY, { request: searchRequestRef.current ?? undefined })
-  }, [runSearch, activeQuery])
-
-  const usePreparedDemo = useCallback(() => {
-    dispatch({ type: "DEMO_MODE_ENTERED" })
-    runSearch(activeQuery || DEMO_QUERY, { forceDemo: true, request: searchRequestRef.current ?? undefined })
+    if (!activeQuery && !searchRequestRef.current) return
+    runSearch(activeQuery, { request: searchRequestRef.current ?? undefined })
   }, [runSearch, activeQuery])
 
   const selectCity = useCallback(
@@ -370,20 +405,81 @@ export function AtlasShell() {
   const resetDemo = useCallback(() => {
     searchSeq.current++
     ingestSeq.current++
+    clearStageTimer()
     dispatch({ type: "DEMO_RESET" })
     setLayersOpen(false)
     setSheetTall(false)
     setScanning(false)
     setIngest(INGEST_IDLE)
+    setUserLocation(null)
     camera.flyTo(FRAME_IDLE, 900)
+  }, [camera, clearStageTimer])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const shareId = params.get("linq")
+    if (!shareId) return
+    const seq = ++searchSeq.current
+    fetchSharedLinqSearch(shareId)
+      .then((shared) => {
+        if (searchSeq.current !== seq) return
+        const wire = shared.response
+        const requestFromLink: SearchRequest = {
+          query: wire.query.product,
+          objective: wire.query.goal === "hiring" ? "talent" : wire.query.goal,
+          budget:
+            wire.query.budgetUsd > 0
+              ? { amount: wire.query.budgetUsd, currency: "USD" }
+              : undefined,
+          technologies: wire.query.icpStack,
+          timeRange: "30d",
+          layers: ["demand", "events", "communities"],
+          location: wire.query.location,
+        }
+        const legacy = toLegacyShape(wire)
+        dispatch({
+          type: "SEARCH_STARTED",
+          query: requestFromLink.query,
+          request: requestFromLink,
+        })
+        dispatch({
+          type: "SEARCH_SUCCEEDED",
+          response: legacy,
+          degradedNote: wire.degraded ? wire.warnings.join(" · ") : undefined,
+        })
+        resultsRef.current = legacy.opportunities
+        setUserLocation(
+          wire.locationContext
+            ? [wire.locationContext.lng, wire.locationContext.lat]
+            : null,
+        )
+        const focusId = params.get("opp") ?? shared.focusOpportunityId
+        const focus = legacy.opportunities.find((item) => item.id === focusId)
+        if (focus) {
+          dispatch({ type: "OPPORTUNITY_SELECTED", id: focus.id })
+          const [x, y] = projectCity(focus.coordinates[0], focus.coordinates[1])
+          camera.flyTo(cityFrame(x, y, window.innerWidth, window.innerHeight), 820)
+        } else {
+          camera.flyTo(resultsFrame(projectResults(legacy.opportunities)), 900)
+        }
+      })
+      .catch((error: unknown) => {
+        if (searchSeq.current !== seq) return
+        dispatch({
+          type: "SEARCH_FAILED",
+          message:
+            error instanceof Error ? error.message : "The Linq result link is unavailable.",
+        })
+      })
   }, [camera])
 
   const toggleSheet = useCallback(() => setSheetTall((tall) => !tall), [])
 
   const runImport = useCallback(() => {
-    const url = ingestUrlRef.current.trim() || PREPARED_INGEST_URL
+    const url = ingestUrlRef.current.trim()
+    if (!url) return
     const seq = ++ingestSeq.current
-    setIngest({ url, request: { status: "loading", stage: "fetching" }, result: null, prepared: false })
+    setIngest({ url, request: { status: "loading", stage: "fetching" }, result: null })
     ingestEvent(url)
       .then((result) => {
         if (ingestSeq.current !== seq) return
@@ -396,7 +492,6 @@ export function AtlasShell() {
               retryable: true,
             },
             result: null,
-            prepared: false,
           })
           return
         }
@@ -407,7 +502,6 @@ export function AtlasShell() {
               ? { status: "partial", message: result.extraction.warnings.join(" · ") }
               : { status: "success" },
           result,
-          prepared: false,
         })
       })
       .catch(() => {
@@ -416,14 +510,8 @@ export function AtlasShell() {
           url,
           request: { status: "error", message: "the ingest endpoint didn't respond", retryable: true },
           result: null,
-          prepared: false,
         })
       })
-  }, [])
-
-  const usePreparedImport = useCallback(() => {
-    ingestSeq.current++
-    setIngest({ url: PREPARED_INGEST_URL, request: { status: "success" }, result: PREPARED_INGEST, prepared: true })
   }, [])
 
   const changeIngestUrl = useCallback((url: string) => {
@@ -459,7 +547,7 @@ export function AtlasShell() {
   const changeTimeRange = useCallback(
     (range: TimeRange) => {
       dispatch({ type: "TIME_RANGE_CHANGED", range })
-      showToast(`Window: ${range.toUpperCase()} · demo signals`)
+      showToast(`Window: ${range.toUpperCase()}`)
     },
     [showToast],
   )
@@ -488,7 +576,7 @@ export function AtlasShell() {
     ? results.find((item) => item.id === displayId) ?? null
     : null
 
-  // El overlay refleja el stage real del request — sin timers propios (§5/§10).
+  // El overlay refleja el stage del request (§5/§10).
   const stageIndex =
     request.status === "loading"
       ? Math.max(0, SEARCH_STAGES.findIndex((stage) => stage.id === request.stage))
@@ -505,7 +593,8 @@ export function AtlasShell() {
     : null
 
   const searchMeta = response ? { searchId: response.searchId, generatedAt: response.generatedAt } : null
-  const eventFeedDown = response !== null && response.dataCoverage.unavailableSources.length > 0
+  const eventFeedDown =
+    response !== null && response.dataCoverage.unavailableSources.includes("luma")
 
   const layerOffClasses = LAYER_ORDER.filter((layer) => !layers.includes(layer))
     .map((layer) => ` layer-off-${layer}`)
@@ -514,9 +603,7 @@ export function AtlasShell() {
   const compact = view !== "idle"
   const shellClassName = `atlas state-${view}${compact ? " search-compact" : ""}${sheetTall ? " sheet-tall" : ""}${scanning ? " scanning" : ""}${zoomClasses}${layerOffClasses}`
 
-  const requestBanner = (
-    <RequestBanner request={request} onRetry={retrySearch} onUsePreparedDemo={usePreparedDemo} />
-  )
+  const requestBanner = <RequestBanner request={request} onRetry={retrySearch} />
 
   return (
     <div className={shellClassName}>
@@ -555,6 +642,7 @@ export function AtlasShell() {
         selectedId={selectedId}
         hoveredId={hoveredId}
         timeRange={timeRange}
+        userLocation={userLocation}
         onSelect={selectCity}
         onHover={hoverCity}
       />
@@ -575,12 +663,7 @@ export function AtlasShell() {
         searchMeta={searchMeta}
         eventFeedDown={eventFeedDown}
         importSlot={
-          <EventImport
-            ingest={ingest}
-            onUrlChange={changeIngestUrl}
-            onImport={runImport}
-            onUsePrepared={usePreparedImport}
-          />
+          <EventImport ingest={ingest} onUrlChange={changeIngestUrl} onImport={runImport} />
         }
         onClose={closeSelection}
         onGenerateCampaign={openCampaign}

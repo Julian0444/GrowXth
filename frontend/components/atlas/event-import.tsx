@@ -7,15 +7,12 @@ export type IngestUiState = {
   url: string
   request: RequestState
   result: EventIngestResponse | null
-  // true cuando el resultado vino del fixture pre-ingerido (respaldo offline)
-  prepared: boolean
 }
 
 export const INGEST_IDLE: IngestUiState = {
   url: "",
   request: { status: "idle" },
   result: null,
-  prepared: false,
 }
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -43,26 +40,24 @@ function formatRegistration(status: string | undefined): string | null {
   return status.replaceAll("_", " ")
 }
 
-// Import de una URL de Luma (§10) — la demo técnica: el evento entra al panel
-// con su fuente real y su confidence (cobertura de campos), nunca inventados.
+// Import de una URL de Luma (§10) — el evento entra al panel con su fuente
+// real y su confidence (cobertura de campos), nunca inventados.
 export function EventImport({
   ingest,
   onUrlChange,
   onImport,
-  onUsePrepared,
 }: {
   ingest: IngestUiState
   onUrlChange: (url: string) => void
   onImport: () => void
-  onUsePrepared: () => void
 }) {
-  const { url, request, result, prepared } = ingest
+  const { url, request, result } = ingest
   const loading = request.status === "loading"
   const event = result?.event ?? null
 
   const submit = (formEvent: FormEvent) => {
     formEvent.preventDefault()
-    if (!loading) onImport()
+    if (!loading && url.trim()) onImport()
   }
 
   const date = event ? literalDate(event.startsAt) : null
@@ -77,7 +72,7 @@ export function EventImport({
           type="text"
           value={url}
           onChange={(changeEvent) => onUrlChange(changeEvent.target.value)}
-          placeholder="luma.com/9x1573sw"
+          placeholder="luma.com/…"
           autoComplete="off"
           spellCheck={false}
           aria-label="Luma event URL"
@@ -95,9 +90,6 @@ export function EventImport({
           <div className="actions">
             <button className="req-btn" type="button" onClick={onImport}>
               Retry
-            </button>
-            <button className="req-btn solid" type="button" onClick={onUsePrepared}>
-              Use prepared import
             </button>
           </div>
         </div>
@@ -128,7 +120,6 @@ export function EventImport({
           </div>
           <p className="ingest-note">
             {result.extraction.fieldsExtracted.length} of 10 fields extracted from structured data
-            {prepared && " · prepared import (captured Jul 23)"}
           </p>
 
           <div className="evi">

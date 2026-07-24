@@ -239,7 +239,24 @@ const OPPORTUNITIES: Opportunity[] = [
     },
     confidence: 84,
     status: 'observed',
-    humanValidated: true,
+    humanValidated: false,
+    distanceMiles: null,
+    event: {
+      id: 'evt-sfpython-july',
+      name: 'SF Python — July Monthly Meetup',
+      url: 'https://lu.ma/sfpython-july',
+      startsAt: '2026-07-28T18:30:00.000Z',
+      venueArea: 'SoMa',
+    },
+    campaign: {
+      id: 'camp-opp-sfpython',
+      opportunityId: 'opp-sfpython',
+      title: 'SF Python × Postgres-native background jobs',
+      variantA:
+        'Join SF Python to see how Postgres-native background jobs help Python teams ship faster. Leave with a practical workflow you can try the same day.',
+      variantB:
+        'Building Python backends? Leave SF Python with one working background-jobs playbook—not another product pitch.',
+    },
   },
   {
     id: 'opp-localfirst',
@@ -303,6 +320,23 @@ const OPPORTUNITIES: Opportunity[] = [
     confidence: 66,
     status: 'estimated',
     humanValidated: false,
+    distanceMiles: null,
+    event: {
+      id: 'evt-localfirst-sync',
+      name: 'Local-First SF — sync engines night',
+      url: 'https://lu.ma/localfirst-sf',
+      startsAt: '2026-08-04T18:30:00.000Z',
+      venueArea: 'SoMa',
+    },
+    campaign: {
+      id: 'camp-opp-localfirst',
+      opportunityId: 'opp-localfirst',
+      title: 'Local-First SF × sync engines',
+      variantA:
+        'Join Local-First SF for a practical session on sync engines for Python backends. Leave with a workflow you can try the same day.',
+      variantB:
+        'Shipping offline-first software? Leave Local-First SF with one working sync pattern—not another product pitch.',
+    },
   },
   {
     id: 'opp-rust',
@@ -366,6 +400,17 @@ const OPPORTUNITIES: Opportunity[] = [
     confidence: 41,
     status: 'prepared',
     humanValidated: false,
+    distanceMiles: null,
+    event: null,
+    campaign: {
+      id: 'camp-opp-rust',
+      opportunityId: 'opp-rust',
+      title: 'Rust Bay Area × async infrastructure',
+      variantA:
+        'Join Rust Bay Area for a practical async infrastructure night. Leave with a workflow you can test the same day.',
+      variantB:
+        'Building async systems? Help shape a Rust Bay Area session around the patterns you actually need.',
+    },
   },
 ];
 

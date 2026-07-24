@@ -75,7 +75,7 @@ test('sin cadencia conocida → cadenceReliability null', () => {
   assert.equal(res.breakdown.cadenceReliability, null);
 });
 
-test('sin sponsors → exclusivityGap máximo (1)', () => {
+test('sin evidencia de sponsors → exclusivityGap null (no inferir ausencia)', () => {
   const res = scoreCommunity({ community: community({ pastSponsors: [] }), evidence: EVIDENCE, request: REQUEST });
-  assert.equal(res.breakdown.exclusivityGap, 1);
+  assert.equal(res.breakdown.exclusivityGap, null);
 });

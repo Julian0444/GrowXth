@@ -3,10 +3,10 @@
 import { useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react"
 import { ArrowRight } from "lucide-react"
 import type { SearchRequest } from "@/lib/api/types"
-import { DEMO_QUERY } from "@/lib/demo/fixtures"
 
 // Intake inicial: el usuario cuenta qué construye, qué busca y con qué budget
 // ANTES de ver una query — la búsqueda del mapa queda como refinamiento.
+// Nada viene precargado: descripción vacía, objetivo sin elegir, budget vacío.
 export type IntakePayload = {
   description: string
   objective: SearchRequest["objective"]
@@ -20,39 +20,31 @@ const OBJECTIVES: { id: SearchRequest["objective"]; label: string }[] = [
   { id: "awareness", label: "Brand awareness" },
 ]
 
-const BUDGETS: { amount: number | null; label: string }[] = [
-  { amount: null, label: "Not set" },
-  { amount: 5000, label: "$5K" },
-  { amount: 20000, label: "$20K" },
-  { amount: 50000, label: "$50K" },
-]
-
-const EXAMPLES: { label: string; description: string; objective: SearchRequest["objective"]; budget: number | null }[] = [
-  { label: "Agent observability", description: DEMO_QUERY, objective: "adoption", budget: 20000 },
-  { label: "Vector database", description: "Vector database for production RAG", objective: "feedback", budget: null },
-]
-
 export function OnboardingIntake({
   onLaunch,
   // Slot del RequestBanner: un error de búsqueda devuelve al intake, y el aviso
-  // (con Retry / Use prepared demo) vive dentro de la card.
+  // (con Retry) vive dentro de la card.
   banner,
 }: {
   onLaunch: (payload: IntakePayload) => void
   banner?: ReactNode
 }) {
   const [description, setDescription] = useState("")
-  const [objective, setObjective] = useState<SearchRequest["objective"]>("adoption")
-  const [budget, setBudget] = useState<number | null>(20000)
+  const [objective, setObjective] = useState<SearchRequest["objective"] | null>(null)
+  // Solo dígitos; se muestra formateado con separador de miles.
+  const [budgetDigits, setBudgetDigits] = useState("")
+
+  const ready = description.trim().length > 0 && objective !== null
 
   const submit = (event: FormEvent) => {
     event.preventDefault()
-    const text = description.trim() || DEMO_QUERY
-    setDescription(text)
+    const text = description.trim()
+    if (!text || objective === null) return
+    const amount = budgetDigits ? Number(budgetDigits) : 0
     onLaunch({
       description: text,
       objective,
-      budget: budget !== null ? { amount: budget, currency: "USD" } : undefined,
+      budget: amount > 0 ? { amount, currency: "USD" } : undefined,
     })
   }
 
@@ -69,7 +61,7 @@ export function OnboardingIntake({
         <span className="eyebrow">Growth Atlas</span>
         <h2 className="intake-title">Where should you grow next?</h2>
         <p className="intake-sub">
-          Tell us about your product once — every market we surface on the map is ranked for it.
+          Describe your product once. We rank real San Francisco communities and events for it.
         </p>
         <form onSubmit={submit}>
           <label className="intake-label" htmlFor="intake-description">
@@ -82,7 +74,7 @@ export function OnboardingIntake({
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             onKeyDown={onFieldKeyDown}
-            placeholder="e.g. We build an observability platform for AI agents."
+            placeholder="Describe your product and who it's for…"
             autoComplete="off"
           />
           <span className="intake-label" id="intake-objective-label">
@@ -101,44 +93,28 @@ export function OnboardingIntake({
               </button>
             ))}
           </div>
-          <span className="intake-label" id="intake-budget-label">
-            Campaign budget
-          </span>
-          <div className="intake-chips" role="group" aria-labelledby="intake-budget-label">
-            {BUDGETS.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                className={budget === option.amount ? "on" : undefined}
-                aria-pressed={budget === option.amount}
-                onClick={() => setBudget(option.amount)}
-              >
-                {option.label}
-              </button>
-            ))}
+          <label className="intake-label" htmlFor="intake-budget">
+            Campaign budget <span className="opt">· optional</span>
+          </label>
+          <div className="intake-budget">
+            <span aria-hidden="true">$</span>
+            <input
+              id="intake-budget"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              value={budgetDigits ? Number(budgetDigits).toLocaleString("en-US") : ""}
+              onChange={(event) => setBudgetDigits(event.target.value.replace(/\D/g, "").slice(0, 9))}
+              placeholder="Amount in USD"
+              aria-label="Campaign budget in US dollars (optional)"
+            />
           </div>
-          <button className="intake-go" type="submit">
+          <button className="intake-go" type="submit" disabled={!ready}>
             Map my opportunities
             <ArrowRight size={14} strokeWidth={2} />
           </button>
         </form>
         {banner}
-        <p className="intake-examples">
-          <span>Try an example:</span>
-          {EXAMPLES.map((example) => (
-            <button
-              key={example.label}
-              type="button"
-              onClick={() => {
-                setDescription(example.description)
-                setObjective(example.objective)
-                setBudget(example.budget)
-              }}
-            >
-              {example.label}
-            </button>
-          ))}
-        </p>
       </div>
     </div>
   )

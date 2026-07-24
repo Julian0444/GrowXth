@@ -22,6 +22,10 @@ export interface SeedGraph {
   events: SFEvent[];
   communities: Community[];
   organizers: Organizer[];
+  sourceMeta: {
+    source: string;
+    fetchedAt: string;
+  } | null;
 }
 
 const SEED_FILES = {
@@ -35,6 +39,7 @@ const SEED_FILES = {
 const OPTIONAL_FILES = {
   themes: 'topics.json',
   evidence: 'evidence.json',
+  sourceMeta: 'sf-source-meta.json',
 } as const;
 
 // Quita solo líneas cuyo primer carácter no-espacio es `//`. Deja intactos los
@@ -80,19 +85,30 @@ function readArray<T>(seedDir: string, file: string): T[] {
   return parsed as T[];
 }
 
-export function loadGraph(seedDir: string = findSeedDir()): SeedGraph {
-  return {
-    events: readArray<SFEvent>(seedDir, SEED_FILES.events),
-    communities: readArray<Community>(seedDir, SEED_FILES.communities),
-    organizers: readArray<Organizer>(seedDir, SEED_FILES.organizers),
-  };
-}
-
 function readOptionalArray<T>(seedDir: string, file: string): T[] {
   const path = join(seedDir, file);
   if (!existsSync(path)) return [];
   const parsed = parseJsonc(readFileSync(path, 'utf8'), file);
   return Array.isArray(parsed) ? (parsed as T[]) : [];
+}
+
+function readOptionalObject<T extends object>(seedDir: string, file: string): T | null {
+  const path = join(seedDir, file);
+  if (!existsSync(path)) return null;
+  const parsed = parseJsonc(readFileSync(path, 'utf8'), file);
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as T) : null;
+}
+
+export function loadGraph(seedDir: string = findSeedDir()): SeedGraph {
+  return {
+    events: readArray<SFEvent>(seedDir, SEED_FILES.events),
+    communities: readArray<Community>(seedDir, SEED_FILES.communities),
+    organizers: readArray<Organizer>(seedDir, SEED_FILES.organizers),
+    sourceMeta: readOptionalObject<NonNullable<SeedGraph['sourceMeta']>>(
+      seedDir,
+      OPTIONAL_FILES.sourceMeta,
+    ),
+  };
 }
 
 // Lector genérico de un array semilla opcional (JSONC). [] si no existe.

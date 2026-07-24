@@ -25,13 +25,15 @@ import type {
   ProductInterpretation,
   SearchResponse as LegacySearchResponse,
   SourceReference,
+  EventOpportunity,
+  CampaignRecommendation,
 } from "./types"
 
 // Zoom más cerrado que el de país: para plays de SF encuadramos el barrio.
 export const NEIGHBORHOOD_ZOOM = 6
 
-function pct(n: number | null): number {
-  return n == null ? 0 : Math.round(Math.max(0, Math.min(1, n)) * 100)
+function pct(n: number | null): number | null {
+  return n == null ? null : Math.round(Math.max(0, Math.min(1, n)) * 100)
 }
 
 // Primeras palabras del texto como "label" corto de la razón legacy.
@@ -89,6 +91,78 @@ function toEvidence(opp: NewOpportunity, evidence: Record<string, NewEvidence>):
   })
 }
 
+function toEvents(
+  opp: NewOpportunity,
+  evidence: Record<string, NewEvidence>,
+): EventOpportunity[] {
+  if (!opp.event) return []
+  const sourceEvidence =
+    Object.values(evidence).find(
+      (item) => item.source === "luma" && opp.reasons.some((reason) => reason.evidenceIds.includes(item.id)),
+    ) ?? null
+  return [
+    {
+      id: opp.event.id,
+      name: opp.event.name,
+      url: opp.event.url,
+      startsAt: opp.event.startsAt ?? new Date().toISOString(),
+      venue: opp.event.venueArea ?? undefined,
+      city: opp.event.venueArea ?? "San Francisco",
+      coordinates: [opp.lng, opp.lat],
+      sponsors: [],
+      relevance: opp.score,
+      confidence: opp.confidence,
+      source: sourceEvidence
+        ? {
+            id: sourceEvidence.id,
+            provider: sourceEvidence.source,
+            url: sourceEvidence.url ?? undefined,
+            title: sourceEvidence.title,
+            observedAt: sourceEvidence.observedAt,
+            isEstimated: sourceEvidence.status !== "observed",
+          }
+        : {
+            id: `source-${opp.event.id}`,
+            provider: "luma",
+            url: opp.event.url,
+            title: opp.event.name,
+            observedAt: new Date().toISOString(),
+            isEstimated: false,
+          },
+    },
+  ]
+}
+
+function toCampaign(opp: NewOpportunity): CampaignRecommendation {
+  const target = opp.play.audienceSpec.targetSize ?? 40
+  const budget = opp.roi.tierPriceUsd ?? 2500
+  const retained = Math.max(1, Math.round(target * 0.25))
+  return {
+    campaignId: opp.campaign.id,
+    opportunityId: opp.id,
+    title: opp.campaign.title,
+    subtitle: "AI found the audience. Humans choose the clearest message. Linq launches it.",
+    track: opp.play.headline,
+    prize: "Hands-on product credit for the winning build",
+    workshop: `A practical session for ${opp.play.audienceSpec.profile.join(" + ") || "builders"}`,
+    budgetBreakdown: [
+      { label: "Community partnership", amount: budget },
+      { label: "Workshop + activation", amount: Math.round(budget * 0.35) },
+    ],
+    organizerMessage: opp.campaign.variantA,
+    funnel: [
+      { label: "Event audience", value: target },
+      { label: "Qualified builders", value: Math.max(1, Math.round(target * 0.55)) },
+      { label: "Activated", value: Math.max(1, Math.round(target * 0.35)) },
+      { label: "Retained", value: retained },
+    ],
+    costPerRetained: `$${Math.round((budget * 1.35) / retained)}`,
+    attributionCode: `GROWX-${opp.id.replace(/[^a-z0-9]/gi, "").slice(-8).toUpperCase()}`,
+    variantA: opp.campaign.variantA,
+    variantB: opp.campaign.variantB,
+  }
+}
+
 function toLegacyOpportunity(
   opp: NewOpportunity,
   index: number,
@@ -97,7 +171,7 @@ function toLegacyOpportunity(
   return {
     id: opp.id,
     rank: index + 1,
-    city: "San Francisco",
+    city: opp.subtitle.split(" · ")[0] || opp.event?.venueArea || opp.title,
     country: "USA",
     coordinates: [opp.lng, opp.lat], // SIEMPRE [lng, lat]
     score: opp.score,
@@ -108,7 +182,9 @@ function toLegacyOpportunity(
     metrics: toMetrics(opp),
     evidence: toEvidence(opp, evidence),
     signals: [], // la nube se genera determinística en signal-layout
-    events: [], // el SearchResponse no trae detalle de evento
+    events: toEvents(opp, evidence),
+    campaign: toCampaign(opp),
+    distanceMiles: opp.distanceMiles,
   }
 }
 
@@ -146,6 +222,8 @@ export function toLegacyShape(res: NewSearchResponse): LegacySearchResponse {
     interpretation: toInterpretation(res),
     opportunities: res.opportunities.map((opp, index) => toLegacyOpportunity(opp, index, res.evidence)),
     dataCoverage: toCoverage(res),
+    warnings: res.warnings,
+    locationContext: res.locationContext,
   }
 }
 

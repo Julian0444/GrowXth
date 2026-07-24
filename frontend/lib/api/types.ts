@@ -11,6 +11,13 @@ export type SearchRequest = {
   technologies?: string[]
   timeRange: "7d" | "30d" | "90d"
   layers: Array<"demand" | "events" | "communities" | "companies">
+  location?: {
+    lat: number
+    lng: number
+    source: "linq" | "browser"
+    locality?: string | null
+    updatedAt?: string | null
+  }
 }
 
 export type SearchResponse = {
@@ -19,6 +26,15 @@ export type SearchResponse = {
   interpretation: ProductInterpretation
   opportunities: Opportunity[]
   dataCoverage: DataCoverage
+  warnings?: string[]
+  locationContext?: {
+    source: "linq" | "browser"
+    lat: number
+    lng: number
+    locality: string | null
+    updatedAt: string | null
+    scorePolicy: "tie_break_only"
+  } | null
 }
 
 export type ProductInterpretation = {
@@ -47,6 +63,7 @@ export type Opportunity = {
   events: EventOpportunity[]
   comparison?: MarketComparison
   campaign?: CampaignRecommendation
+  distanceMiles?: number | null
 }
 
 export type OpportunityReason = {
@@ -60,11 +77,11 @@ export type OpportunityReason = {
 }
 
 export type OpportunityMetrics = {
-  demand: number
-  developerFit: number
-  eventMomentum: number
-  costEfficiency: number
-  competitionGap: number
+  demand: number | null
+  developerFit: number | null
+  eventMomentum: number | null
+  costEfficiency: number | null
+  competitionGap: number | null
 }
 
 export type SignalPoint = {
@@ -131,6 +148,8 @@ export type DataCoverage = {
 export type CampaignRequest = { searchId: string; opportunityId: string; eventId?: string }
 
 export type CampaignRecommendation = {
+  campaignId: string
+  opportunityId: string
   title: string
   subtitle: string
   track: string
@@ -141,6 +160,8 @@ export type CampaignRecommendation = {
   funnel: Array<{ label: string; value: number }>
   costPerRetained: string
   attributionCode: string // ej. "GROWX-BLR-0823"
+  variantA: string
+  variantB: string
 }
 
 export type RequestState =

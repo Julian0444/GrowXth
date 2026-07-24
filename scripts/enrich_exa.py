@@ -32,13 +32,18 @@ import httpx
 EXA_BASE = "https://api.exa.ai"
 SEARCH_ENDPOINT = "/search"
 RESULTS_PER_QUERY = 5
+MAX_EVIDENCE_PER_COMMUNITY = 5
 MAX_CONCURRENCY = 3
 REQUEST_TIMEOUT = 10.0
 
 ROOT = Path(__file__).resolve().parent.parent
 COMMUNITIES_PATH = ROOT / "frontend" / "data" / "seed" / "sf-communities.json"
+EVENTS_PATH = ROOT / "frontend" / "data" / "seed" / "sf-events.json"
 RAW_EXA_PATH = ROOT / "data" / "raw" / "exa-communities.json"
 EVIDENCE_OUT_PATH = ROOT / "frontend" / "data" / "seed" / "community-evidence.json"
+
+
+GENERIC_NAMES = {"personal", "events", "community"}
 
 
 def query_variants(name):
@@ -110,17 +115,24 @@ def fetch(api_key, communities):
     tasks = []
     for com in communities:
         name = com.get("name")
-        if not name:
+        query_name = com.get("_queryName") or name
+        if not query_name:
             continue
-        for q in query_variants(name):
-            tasks.append((com["id"], name, q))
+        for q in query_variants(query_name):
+            tasks.append((com["id"], name, query_name, q))
 
     records = []
     with httpx.Client(base_url=EXA_BASE, timeout=REQUEST_TIMEOUT) as client:
         def run(task):
-            com_id, name, q = task
+            com_id, name, query_name, q = task
             data = _search(client, api_key, q)
-            return {"communityId": com_id, "communityName": name, "query": q, "response": data}
+            return {
+                "communityId": com_id,
+                "communityName": name,
+                "queryName": query_name,
+                "query": q,
+                "response": data,
+            }
 
         with ThreadPoolExecutor(max_workers=MAX_CONCURRENCY) as pool:
             for rec in pool.map(run, tasks):
@@ -142,7 +154,7 @@ def score_to_confidence(score):
     return max(0.0, min(1.0, v))
 
 
-def result_to_evidence(result, fetched_at):
+def result_to_evidence(result, fetched_at, community_id):
     url = dig(result, "url", "id")
     canon = canonical_url(url)
     if not canon:
@@ -158,7 +170,7 @@ def result_to_evidence(result, fetched_at):
         excerpt = highlights[0][:200]
 
     ev = {
-        "id": f"ev-exa-{hashlib.sha1(canon.encode('utf-8')).hexdigest()[:12]}",
+        "id": f"ev-exa-{hashlib.sha1(f'{community_id}:{canon}'.encode('utf-8')).hexdigest()[:12]}",
         "source": "exa",
         "kind": "web_page",
         "url": url,
@@ -178,30 +190,67 @@ def result_to_evidence(result, fetched_at):
 def normalize(records):
     fetched_at = datetime.now(timezone.utc).isoformat()
     by_community = {}
-    seen_urls = set()  # dedupe global (dentro y entre comunidades)
+    seen_urls = {}  # dedupe dentro de cada comunidad; una fuente puede servir a dos comunidades.
 
     for rec in records:
         response = rec.get("response")
         if not response:
             continue
         com_id = rec["communityId"]
+        context = rec.get("queryName") or rec.get("communityName") or ""
+        context_tokens = {
+            token.lower()
+            for token in context.replace("&", " ").replace("|", " ").split()
+            if len(token) >= 4 and token.lower() not in {"with", "from", "events", "personal"}
+        }
         results = dig(response, "results", "data.results", default=[]) or []
         for result in results:
-            ev, canon = result_to_evidence(result, fetched_at)
-            if not ev or canon in seen_urls:
+            if len(by_community.get(com_id, [])) >= MAX_EVIDENCE_PER_COMMUNITY:
+                break
+            searchable = " ".join(
+                str(value)
+                for value in [
+                    dig(result, "title", default=""),
+                    dig(result, "url", default=""),
+                    " ".join(dig(result, "highlights", default=[]) or []),
+                ]
+            ).lower()
+            if context_tokens and not any(token in searchable for token in context_tokens):
                 continue
-            seen_urls.add(canon)
+            ev, canon = result_to_evidence(result, fetched_at, com_id)
+            community_seen = seen_urls.setdefault(com_id, set())
+            if not ev or canon in community_seen:
+                continue
+            community_seen.add(canon)
             by_community.setdefault(com_id, []).append(ev)
 
     return by_community
 
 
 # --------------------------------------------------------------------------- #
+def _load_jsonc(path):
+    lines = [
+        line for line in path.read_text(encoding="utf-8").splitlines()
+        if not line.lstrip().startswith("//")
+    ]
+    return json.loads("\n".join(lines))
+
+
 def _load_communities():
     if not COMMUNITIES_PATH.exists():
         print(f"Falta {COMMUNITIES_PATH}.", file=sys.stderr)
         sys.exit(1)
-    return json.loads(COMMUNITIES_PATH.read_text(encoding="utf-8"))
+    communities = _load_jsonc(COMMUNITIES_PATH)
+    events = _load_jsonc(EVENTS_PATH) if EVENTS_PATH.exists() else []
+    event_names = {}
+    for event in events:
+        for community_id in event.get("communityIds", []):
+            event_names.setdefault(community_id, event.get("name"))
+    for community in communities:
+        name = str(community.get("name", "")).strip()
+        if name.lower() in GENERIC_NAMES:
+            community["_queryName"] = event_names.get(community.get("id"))
+    return communities
 
 
 def run_fetch_and_normalize():

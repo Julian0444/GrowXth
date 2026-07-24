@@ -180,6 +180,11 @@ export function OpportunityDrawer({
                   <h2 className="d-city" tabIndex={-1} ref={headingRef}>
                     {shown.city}
                   </h2>
+                  {shown.distanceMiles != null && (
+                    <p className="location-distance mono">
+                      {`${shown.distanceMiles} mi from the shared location`}
+                    </p>
+                  )}
                 </div>
                 <div className="d-head-right">
                   <div className="score-block">
@@ -234,9 +239,9 @@ export function OpportunityDrawer({
                   <div className="metric" key={key}>
                     <span className="lbl">{label}</span>
                     <span className="bar">
-                      <i style={{ width: `${shown.metrics[key]}%` }} />
+                      <i style={{ width: `${shown.metrics[key] ?? 0}%` }} />
                     </span>
-                    <span className="val mono">{shown.metrics[key]}</span>
+                    <span className="val mono">{shown.metrics[key] ?? "—"}</span>
                   </div>
                 ))}
               </div>
@@ -248,7 +253,15 @@ export function OpportunityDrawer({
                     <div className="evi" key={item.id}>
                       <span className="prov">{item.provider}</span>
                       <div className="body">
-                        <div className="ttl">{item.title}</div>
+                        <div className="ttl">
+                          {item.url ? (
+                            <a href={item.url} target="_blank" rel="noreferrer">
+                              {item.title}
+                            </a>
+                          ) : (
+                            item.title
+                          )}
+                        </div>
                         <div className="when">{formatEvidenceWhen(item)}</div>
                       </div>
                       <span className={`badge${item.isEstimated ? " est" : ""}`}>
@@ -348,7 +361,7 @@ export function OpportunityDrawer({
               <button
                 className="btn-primary"
                 type="button"
-                onClick={() => onToast("Demo — export lands with the backend")}
+                onClick={() => onToast("Export coming soon")}
               >
                 Export brief
               </button>

@@ -7,6 +7,7 @@ import type { Opportunity, SearchResponse } from '@/lib/contracts/growxth';
 export interface SmsReplyOptions {
   baseUrl?: string; // p.ej. https://growxth.app — de env APP_URL en la ruta
   maxChars?: number;
+  shareId?: string;
 }
 
 const DEFAULT_MAX = 500;
@@ -16,9 +17,11 @@ function roiText(opp: Opportunity): string {
   return band ? `$${band[0]}-${band[1]}/dev` : 'ROI N/D';
 }
 
-function link(baseUrl: string, opp: Opportunity): string {
+function link(baseUrl: string, opp: Opportunity, shareId?: string): string {
   const base = baseUrl.replace(/\/+$/, '');
-  return `${base}/?opp=${encodeURIComponent(opp.id)}`;
+  const params = new URLSearchParams({ opp: opp.id });
+  if (shareId) params.set('linq', shareId);
+  return `${base}/?${params.toString()}`;
 }
 
 export function formatSmsReply(response: SearchResponse, options: SmsReplyOptions = {}): string {
@@ -34,10 +37,11 @@ export function formatSmsReply(response: SearchResponse, options: SmsReplyOption
 
   // Presupuesto de caracteres por opción para el texto (sin el link).
   const lines = top.map((opp, i) => {
-    const url = link(baseUrl, opp);
+    const url = link(baseUrl, opp, options.shareId);
     // Reservamos el link completo + numeración; recortamos solo el título.
     const prefix = `${i + 1}) `;
-    const suffix = ` ${roiText(opp)} → ${url}`;
+    const distance = opp.distanceMiles != null ? ` · ${opp.distanceMiles}mi` : '';
+    const suffix = ` ${roiText(opp)}${distance} → ${url}`;
     const budget = Math.max(20, Math.floor((maxChars - header.length) / top.length) - suffix.length - prefix.length);
     let title = opp.title;
     if (title.length > budget) title = `${title.slice(0, Math.max(1, budget - 1)).trimEnd()}…`;

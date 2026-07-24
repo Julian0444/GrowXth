@@ -67,6 +67,15 @@ export interface SearchRequest {
   product: string; icpStack: string[];
   budgetUsd: number;
   goal: 'adoption' | 'feedback' | 'hiring' | 'awareness';
+  // Ubicación consentida. Linq la obtiene únicamente después de que la persona
+  // acepta el prompt de iMessage; nunca cambia el market score.
+  location?: {
+    lat: number;
+    lng: number;
+    source: 'linq' | 'browser';
+    locality?: string | null;
+    updatedAt?: string | null;
+  };
 }
 
 export interface Reason { text: string; evidenceIds: string[]; }  // nunca vacío
@@ -98,7 +107,7 @@ export interface RoiEstimate {
   tierPriceUsd: number | null;
   expectedAttendance: number | null;
   icpFitRate: number | null;
-  icpFitBasis: 'terac' | 'github' | 'prepared' | null;
+  icpFitBasis: 'luma' | 'terac' | 'github' | 'prepared' | null;
   costPerQualifiedDev: number | null;
   band: [number, number] | null;
   note: string | null;                // "No disponible" si falta input
@@ -112,6 +121,14 @@ export interface Play {
   audienceSpec: AudienceSpec;
 }
 
+export interface CampaignDraft {
+  id: string;
+  opportunityId: string;
+  title: string;
+  variantA: string;
+  variantB: string;
+}
+
 // Nombre conservado a propósito: el frontend ya está construido contra Opportunity.
 export interface Opportunity {
   id: string; title: string; subtitle: string;
@@ -123,7 +140,16 @@ export interface Opportunity {
   roi: RoiEstimate;
   confidence: number;                 // evidencia sobre el mundo
   status: Status;
-  humanValidated: boolean;            // true solo con evidencia Terac
+  humanValidated: boolean;            // reservado; Terac NO modifica ranking
+  distanceMiles: number | null;       // contexto, nunca input del market score
+  event: {
+    id: string;
+    name: string;
+    url: string;
+    startsAt: string | null;
+    venueArea: string | null;
+  } | null;
+  campaign: CampaignDraft;
 }
 
 export interface Coverage {
@@ -139,6 +165,14 @@ export interface SearchResponse {
   coverage: Coverage;
   warnings: string[];
   generatedAt: string; degraded: boolean;
+  locationContext?: {
+    source: 'linq' | 'browser';
+    lat: number;
+    lng: number;
+    locality: string | null;
+    updatedAt: string | null;
+    scorePolicy: 'tie_break_only';
+  } | null;
 }
 
 // ============ L5: Launch Room ============

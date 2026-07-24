@@ -10,10 +10,10 @@ interface EnvSpec {
 
 const SPECS: EnvSpec[] = [
   { name: 'APP_URL', purpose: 'base URL para links en mensajes y OG images' },
-  { name: 'LINQ_API_KEY', purpose: 'envío real de mensajes por Linq (sin ella: mock)' },
+  { name: 'LINQ_API_KEY', purpose: 'envío real de mensajes por Linq' },
   { name: 'LINQ_WEBHOOK_SECRET', purpose: 'verificación de firma del webhook de Linq', requiredInProd: true },
-  { name: 'TERAC_API_KEY', purpose: 'estudios Terac en vivo (sin ella: lee data/seed)' },
-  { name: 'EXA_API_KEY', purpose: 'enriquecimiento web con Exa (opcional)' },
+  { name: 'TERAC_API_KEY', purpose: 'borradores y resultados A/B de Terac' },
+  { name: 'EXA_API_KEY', purpose: 'enriquecimiento batch de fuentes públicas con Exa' },
 ];
 
 let alreadyChecked = false;

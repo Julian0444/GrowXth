@@ -13,13 +13,13 @@ import { searchOpportunities, type PipelineOptions } from '@/lib/server/pipeline
 
 const cache = new TtlCache<SearchResponse>(SIX_HOURS_MS);
 
-function cacheKey(request: SearchRequest, options?: PipelineOptions): string {
+function cacheKey(request: SearchRequest): string {
   return JSON.stringify({
     product: request.product,
     icpStack: request.icpStack,
     budgetUsd: request.budgetUsd,
     goal: request.goal,
-    hv: Boolean(options?.includeHumanValidation),
+    location: request.location ?? null,
   });
 }
 
@@ -36,7 +36,7 @@ function fixtureFallback(request: SearchRequest): SearchResponse {
 export function searchOrFixture(request: SearchRequest, options?: PipelineOptions): SearchResponse {
   checkEnvOnce();
 
-  const key = cacheKey(request, options);
+  const key = cacheKey(request);
   const cached = cache.get(key);
   if (cached) return cached;
 
