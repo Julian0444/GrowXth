@@ -1,14 +1,14 @@
 // POST /api/opportunities/search → SearchResponse (contrato growxth.ts).
-// Corre el pipeline sobre el grafo semilla. Si el grafo todavía no tiene datos
-// (arrays vacíos) el pipeline devuelve 0 oportunidades; en ese caso servimos el
-// fixture preparado marcado degraded, para que la demo siempre muestre 3.
+// Corre el pipeline sobre el grafo semilla vía searchOrFixture (que aplica
+// fallback al fixture, cache 6h, auditoría de labels y guard de env vars).
 // HTTP 200 siempre: el estado viaja en el body (degraded + warnings).
+//
+// ?humanValidation=1 activa el flag includeHumanValidation (evidencia Terac).
 
 import { NextResponse } from 'next/server';
 
 import type { SearchRequest, SearchResponse } from '@/lib/contracts/growxth';
-import { getFixtureSearchResponse } from '@/lib/server/demo/fixtures';
-import { searchOpportunities } from '@/lib/server/pipeline/search-opportunities';
+import { searchOrFixture } from '@/lib/server/pipeline/resolve';
 
 const GOALS = new Set(['adoption', 'feedback', 'hiring', 'awareness']);
 
@@ -31,33 +31,7 @@ export async function POST(request: Request): Promise<NextResponse<SearchRespons
     parsed = { product: '', icpStack: [], budgetUsd: 0, goal: 'adoption' };
   }
 
-  let response: SearchResponse;
-  try {
-    response = searchOpportunities(parsed);
-  } catch (err) {
-    // El pipeline no debería lanzar, pero si lo hace: fixture degradado.
-    const msg = err instanceof Error ? err.message : 'pipeline error';
-    const fixture = getFixtureSearchResponse();
-    return NextResponse.json({
-      ...fixture,
-      query: parsed,
-      degraded: true,
-      warnings: [...fixture.warnings, `Pipeline falló (${msg}); sirviendo fixture preparado.`],
-    });
-  }
-
-  if (response.opportunities.length === 0) {
-    const fixture = getFixtureSearchResponse();
-    return NextResponse.json({
-      ...fixture,
-      query: parsed,
-      degraded: true,
-      warnings: [
-        ...fixture.warnings,
-        'El grafo semilla no tiene datos cargados; sirviendo fixture preparado.',
-      ],
-    });
-  }
-
+  const includeHumanValidation = new URL(request.url).searchParams.get('humanValidation') === '1';
+  const response = searchOrFixture(parsed, { includeHumanValidation });
   return NextResponse.json(response);
 }
