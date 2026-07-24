@@ -4,16 +4,12 @@ import type { FormEvent, ReactNode, RefObject } from "react"
 import { Search } from "lucide-react"
 import { DEMO_QUERY } from "@/lib/demo/fixtures"
 
-const PRESETS = [
-  { label: "Agent observability · $20K", query: DEMO_QUERY },
-  { label: "Fine-tuning API", query: "Fine-tuning API for open models" },
-  { label: "Vector database", query: "Vector database for production RAG" },
-]
-
 // Chips de interpretación (§5, máximo 3) — vienen de la respuesta real
 // (SearchResponse.interpretation + budget del request), no de un hardcode.
 export type InterpretationChips = { product: string; objective: string; budget: string }
 
+// Barra de refinamiento: aparece compacta arriba DESPUÉS del intake inicial —
+// el onboarding (onboarding-intake.tsx) es quien captura la primera búsqueda.
 export function SearchCommand({
   value,
   onValueChange,
@@ -28,7 +24,7 @@ export function SearchCommand({
   chips: InterpretationChips | null
   inputRef: RefObject<HTMLInputElement | null>
   // Slot para el banner de request (§10): vive bajo la search para heredar su
-  // posición idle/compacta.
+  // posición compacta.
   children?: ReactNode
 }) {
   const submit = (event: FormEvent) => {
@@ -49,9 +45,9 @@ export function SearchCommand({
             type="text"
             value={value}
             onChange={(event) => onValueChange(event.target.value)}
-            placeholder="Describe what your company builds…"
+            placeholder="Refine what you're looking for…"
             autoComplete="off"
-            aria-label="Describe what your company builds"
+            aria-label="Refine what you're looking for"
           />
           <button className="search-go" type="submit">
             Map opportunity
@@ -75,21 +71,6 @@ export function SearchCommand({
         </div>
       )}
       {children}
-      <p className="search-hint">We map where your next developers are emerging.</p>
-      <div className="presets">
-        {PRESETS.map((preset) => (
-          <button
-            key={preset.label}
-            type="button"
-            onClick={() => {
-              onValueChange(preset.query)
-              onSearch(preset.query)
-            }}
-          >
-            {preset.label}
-          </button>
-        ))}
-      </div>
     </div>
   )
 }

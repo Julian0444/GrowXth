@@ -67,7 +67,7 @@ export type DemoCampaign = {
 export type DemoCity = {
   name: string
   country: string
-  geo: string // id numérico del país en countries-110m.json
+  coordinates: [number, number] // [lng, lat] — mismo orden que el contrato
   rank: number
   score: number
   confidence: number
@@ -82,7 +82,7 @@ export type DemoCity = {
 
 export const DEMO_CITIES: Record<DemoCityId, DemoCity> = {
   bangalore: {
-    name: "Bangalore", country: "India", geo: "356", rank: 1, score: 92, confidence: 84,
+    name: "Bangalore", country: "India", coordinates: [77.5946, 12.9716], rank: 1, score: 92, confidence: 84,
     recommendation:
       "Highest expected activation efficiency for agent tooling this quarter — strong demand, a dense builder community and low sponsor saturation.",
     reasons: [
@@ -116,7 +116,7 @@ export const DEMO_CITIES: Record<DemoCityId, DemoCity> = {
     },
   },
   buenosaires: {
-    name: "Buenos Aires", country: "Argentina", geo: "032", rank: 2, score: 86, confidence: 79,
+    name: "Buenos Aires", country: "Argentina", coordinates: [-58.3816, -34.6037], rank: 2, score: 86, confidence: 79,
     recommendation:
       "Strongest talent-to-cost ratio in the ranking — organizers are actively looking for infrastructure partners.",
     reasons: [
@@ -148,7 +148,7 @@ export const DEMO_CITIES: Record<DemoCityId, DemoCity> = {
     },
   },
   saopaulo: {
-    name: "São Paulo", country: "Brazil", geo: "076", rank: 3, score: 85, confidence: 81,
+    name: "São Paulo", country: "Brazil", coordinates: [-46.6333, -23.5505], rank: 3, score: 85, confidence: 81,
     recommendation:
       "Largest applied-ML ecosystem in Latin America, with Portuguese-language demand rising fast.",
     reasons: [

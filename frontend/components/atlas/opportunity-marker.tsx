@@ -68,7 +68,9 @@ export const OpportunityMarker = memo(function OpportunityMarker({
           <circle className="core" r={3} />
           <g className="rank-chip" transform="translate(6 -16)">
             <rect width={17} height={13} rx={6.5} />
-            <text x={8.5} y={9.4} textAnchor="middle">{`0${rank}`}</text>
+            <text x={8.5} y={9.4} textAnchor="middle">
+              {String(rank).padStart(2, "0")}
+            </text>
           </g>
           <g className="tag" transform="translate(13 -25)">
             <rect width={tagWidth} height={22} rx={11} />

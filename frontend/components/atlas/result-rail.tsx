@@ -114,7 +114,7 @@ export function ResultRail({
           onMouseLeave={() => onHover(null)}
           onClick={() => onSelect(opportunity.id)}
         >
-          <span className="rk mono">{`0${opportunity.rank}`}</span>
+          <span className="rk mono">{String(opportunity.rank).padStart(2, "0")}</span>
           <span className="nm">{opportunity.city}</span>
           <span className="sc mono">{opportunity.score}</span>
         </button>

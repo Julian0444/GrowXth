@@ -42,9 +42,11 @@ export type Opportunity = {
   recommendation: string // la oración del panel
   reasons: OpportunityReason[]
   metrics: OpportunityMetrics
+  evidence: SourceReference[]
   signals: SignalPoint[]
   events: EventOpportunity[]
   comparison?: MarketComparison
+  campaign?: CampaignRecommendation
 }
 
 export type OpportunityReason = {
@@ -53,6 +55,7 @@ export type OpportunityReason = {
   explanation: string
   impact: "positive" | "neutral" | "negative"
   weight?: number
+  sourceLabel?: string // etiqueta corta de origen mostrada junto a la razón
   evidenceIds: string[]
 }
 
@@ -129,14 +132,14 @@ export type CampaignRequest = { searchId: string; opportunityId: string; eventId
 
 export type CampaignRecommendation = {
   title: string
-  objective: string
-  eventOrCommunity: string
+  subtitle: string
   track: string
   prize: string
   workshop: string
   budgetBreakdown: Array<{ label: string; amount: number }>
   organizerMessage: string
-  measurementPlan: string[]
+  funnel: Array<{ label: string; value: number }>
+  costPerRetained: string
   attributionCode: string // ej. "GROWX-BLR-0823"
 }
 

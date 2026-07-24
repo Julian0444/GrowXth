@@ -5,7 +5,6 @@ import { ComposableMap, Geographies, Geography } from "react-simple-maps"
 import type { AtlasCamera } from "@/hooks/use-atlas-camera"
 import type { Opportunity } from "@/lib/api/types"
 import { MAP_HEIGHT, MAP_WIDTH, PROJECTION_CENTER, PROJECTION_SCALE } from "@/lib/atlas/signal-layout"
-import { DEMO_CITIES, isDemoCityId } from "@/lib/demo/fixtures"
 import type { AtlasViewState } from "./atlas-shell"
 import { OpportunityMarker } from "./opportunity-marker"
 import { SignalCloudLayer } from "./signal-cloud-layer"
@@ -13,7 +12,9 @@ import { SignalCloudLayer } from "./signal-cloud-layer"
 const GEO_URL = "/geo/countries-110m.json"
 
 // Solo re-renderiza al cambiar el país activo — los vuelos de cámara no tocan React.
-const LandLayer = memo(function LandLayer({ activeGeo }: { activeGeo: string | null }) {
+// El resaltado matchea por nombre de país (properties.name del TopoJSON), así
+// funciona para cualquier mercado que devuelva el backend.
+const LandLayer = memo(function LandLayer({ activeCountry }: { activeCountry: string | null }) {
   return (
     <g className="atlas-land">
       <Geographies geography={GEO_URL}>
@@ -21,7 +22,9 @@ const LandLayer = memo(function LandLayer({ activeGeo }: { activeGeo: string | n
           geographies
             .filter((geography) => geography.id !== "010")
             .map((geography) => {
-              const active = activeGeo !== null && geography.id === activeGeo
+              const active =
+                activeCountry !== null &&
+                (geography.properties as { name?: string } | undefined)?.name === activeCountry
               return (
                 <Geography
                   key={geography.rsmKey}
@@ -48,8 +51,8 @@ export const WorldMap = memo(function WorldMap({
   camera,
   view,
   results,
-  selectedCityId,
-  hoveredCityId,
+  selectedId,
+  hoveredId,
   timeRange,
   onSelect,
   onHover,
@@ -58,14 +61,13 @@ export const WorldMap = memo(function WorldMap({
   view: AtlasViewState
   // Marcadores desde la respuesta (§10) — montan recién cuando hay resultados.
   results: readonly Opportunity[]
-  selectedCityId: string | null
-  hoveredCityId: string | null
+  selectedId: string | null
+  hoveredId: string | null
   timeRange: string
   onSelect: (id: string) => void
   onHover: (id: string | null) => void
 }) {
-  const activeGeo =
-    selectedCityId && isDemoCityId(selectedCityId) ? DEMO_CITIES[selectedCityId].geo : null
+  const activeCountry = results.find((item) => item.id === selectedId)?.country ?? null
 
   return (
     <div className="map-stage" ref={camera.stageRef}>
@@ -88,11 +90,12 @@ export const WorldMap = memo(function WorldMap({
         </defs>
         {/* La cámara (hooks/use-atlas-camera) setea el transform de este grupo por rAF. */}
         <g ref={camera.groupRef}>
-          <LandLayer activeGeo={activeGeo} />
+          <LandLayer activeCountry={activeCountry} />
           <SignalCloudLayer
             view={view}
-            selectedCityId={selectedCityId}
-            hintCityId={hoveredCityId}
+            results={results}
+            selectedId={selectedId}
+            hintId={hoveredId}
             timeRange={timeRange}
           />
           {results.map((opportunity) => (
@@ -104,8 +107,8 @@ export const WorldMap = memo(function WorldMap({
               score={opportunity.score}
               confidence={opportunity.confidence}
               coordinates={opportunity.coordinates}
-              selected={selectedCityId === opportunity.id}
-              hovered={hoveredCityId === opportunity.id}
+              selected={selectedId === opportunity.id}
+              hovered={hoveredId === opportunity.id}
               onSelect={onSelect}
               onHover={onHover}
               registerNode={camera.registerMarker}

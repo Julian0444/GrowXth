@@ -2,16 +2,7 @@
 
 import type { AtlasViewState } from "@/components/atlas/atlas-shell"
 
-const STATUS: Record<AtlasViewState, { text: string; live: boolean }> = {
-  idle: { text: "Live signals · updated 2m ago", live: true },
-  analyzing: { text: "Analyzing…", live: false },
-  results: { text: "3 markets ranked · demo data", live: false },
-  selected: { text: "3 markets ranked · demo data", live: false },
-  campaign: { text: "Campaign draft · demo data", live: false },
-}
-
 export function AtlasHeader({ view, onReset }: { view: AtlasViewState; onReset: () => void }) {
-  const status = STATUS[view]
   const resettable = view !== "idle" && view !== "analyzing"
 
   return (
@@ -42,17 +33,13 @@ export function AtlasHeader({ view, onReset }: { view: AtlasViewState; onReset: 
         </h1>
         <span className="sub">Developer growth intelligence</span>
       </button>
-      <div className="header-right">
-        {resettable && (
+      {resettable && (
+        <div className="header-right">
           <button className="reset-btn" type="button" onClick={onReset}>
             Restart demo
           </button>
-        )}
-        <div className="status" role="status">
-          <span className={`pip${status.live ? " live" : ""}`} />
-          <span className="txt">{status.text}</span>
         </div>
-      </div>
+      )}
     </header>
   )
 }

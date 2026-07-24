@@ -14,24 +14,27 @@ import type {
   SearchRequest,
   SearchResponse,
 } from "@/lib/api/types"
-import { ATLAS_CITIES, detectTopic, topicLabel, type AtlasLayer, type TimeRange } from "@/lib/atlas-data"
-import { cityFrame, FRAME_IDLE, FRAME_RESULTS, ZOOM_STEP } from "@/lib/atlas/camera"
+import type { AtlasLayer, TimeRange } from "@/lib/atlas-data"
+import { cityFrame, FRAME_IDLE, resultsFrame, ZOOM_STEP } from "@/lib/atlas/camera"
 import { projectCity } from "@/lib/atlas/signal-layout"
-import { DEMO_CITIES, DEMO_QUERY, isDemoCityId, type DemoCityId } from "@/lib/demo/fixtures"
+import { DEMO_QUERY } from "@/lib/demo/fixtures"
 import { PREPARED_INGEST, PREPARED_INGEST_URL } from "@/lib/demo/ingest-fixture"
 import { AnalysisOverlay } from "./analysis-overlay"
 import { EventImport, INGEST_IDLE, type IngestUiState } from "./event-import"
 import { LAYER_ORDER, LayerControls } from "./layer-controls"
+import { OnboardingIntake, type IntakePayload } from "./onboarding-intake"
 import { OpportunityDrawer } from "./opportunity-drawer"
 import { RequestBanner } from "./request-banner"
 import { ResultRail } from "./result-rail"
 import { SearchCommand } from "./search-command"
 import { WorldMap } from "./world-map"
 
+// "idle" = intake inicial (onboarding-intake.tsx) sobre el mapa.
 export type AtlasViewState = "idle" | "analyzing" | "results" | "selected" | "campaign"
 
 // Máquina de estados central (§7) — nada de useState sueltos para view state.
 // Desde el Bloque 3 el request vive acá como RequestState real (§10).
+// La selección es un id string genérico: cualquier mercado del backend.
 type AtlasState = {
   view: AtlasViewState
   searchText: string
@@ -43,10 +46,10 @@ type AtlasState = {
   // "Use prepared demo" (§10): una vez activado, toda búsqueda siguiente va a
   // los fixtures — la presentación no vuelve a depender del backend.
   demoMode: boolean
-  selectedCityId: DemoCityId | null
-  // Retiene la última ciudad para que el contenido del panel no "pope" al cerrar.
-  lastCityId: DemoCityId | null
-  hoveredCityId: string | null
+  selectedId: string | null
+  // Retiene el último mercado para que el contenido del panel no "pope" al cerrar.
+  lastId: string | null
+  hoveredId: string | null
   layers: AtlasLayer[]
   timeRange: TimeRange
 }
@@ -59,7 +62,7 @@ type AtlasAction =
   | { type: "SEARCH_FAILED"; message: string }
   | { type: "DEMO_MODE_ENTERED" }
   | { type: "OPPORTUNITY_HOVERED"; id: string | null }
-  | { type: "OPPORTUNITY_SELECTED"; id: DemoCityId }
+  | { type: "OPPORTUNITY_SELECTED"; id: string }
   | { type: "SELECTION_CLOSED" }
   | { type: "CAMPAIGN_OPENED" }
   | { type: "CAMPAIGN_CLOSED" }
@@ -76,9 +79,9 @@ const INITIAL_STATE: AtlasState = {
   response: null,
   results: [],
   demoMode: false,
-  selectedCityId: null,
-  lastCityId: null,
-  hoveredCityId: null,
+  selectedId: null,
+  lastId: null,
+  hoveredId: null,
   layers: ["demand", "events", "communities"],
   timeRange: "30d",
 }
@@ -103,8 +106,8 @@ function atlasReducer(state: AtlasState, action: AtlasAction): AtlasState {
         request: { status: "loading", stage: SEARCH_STAGES[0].id },
         response: null,
         results: [],
-        selectedCityId: null,
-        hoveredCityId: null,
+        selectedId: null,
+        hoveredId: null,
       }
     case "SEARCH_PROGRESSED":
       if (state.request.status !== "loading") return state
@@ -124,16 +127,16 @@ function atlasReducer(state: AtlasState, action: AtlasAction): AtlasState {
       }
     }
     case "SEARCH_FAILED":
-      if (state.view !== "analyzing") return state
+      // Un error devuelve al intake — el banner (Retry / prepared demo) vive ahí.
       return { ...state, view: "idle", request: { status: "error", message: action.message, retryable: true } }
     case "DEMO_MODE_ENTERED":
       return { ...state, demoMode: true }
     case "OPPORTUNITY_HOVERED":
-      return state.hoveredCityId === action.id ? state : { ...state, hoveredCityId: action.id }
+      return state.hoveredId === action.id ? state : { ...state, hoveredId: action.id }
     case "OPPORTUNITY_SELECTED":
-      return { ...state, view: "selected", selectedCityId: action.id, lastCityId: action.id }
+      return { ...state, view: "selected", selectedId: action.id, lastId: action.id }
     case "SELECTION_CLOSED":
-      return { ...state, view: "results", selectedCityId: null }
+      return { ...state, view: "results", selectedId: null }
     case "CAMPAIGN_OPENED":
       return state.view === "selected" ? { ...state, view: "campaign" } : state
     case "CAMPAIGN_CLOSED":
@@ -172,13 +175,22 @@ function parseBudget(query: string): SearchRequest["budget"] {
   return plain ? { amount: Number(plain[1]), currency: "USD" } : undefined
 }
 
-function buildSearchRequest(query: string, layers: AtlasLayer[], timeRange: TimeRange): SearchRequest {
-  return { query, objective: detectObjective(query), budget: parseBudget(query), timeRange, layers }
-}
-
 function formatBudget(budget: SearchRequest["budget"]): string {
   if (!budget) return "Not set"
   return budget.amount % 1000 === 0 ? `$${budget.amount / 1000}K` : `$${budget.amount}`
+}
+
+function projectResults(opportunities: readonly Opportunity[]): Array<[number, number]> {
+  return opportunities.map((item) => projectCity(item.coordinates[0], item.coordinates[1]))
+}
+
+// Overrides del intake (objetivo/budget elegidos explícitamente) o retry con el
+// request original; sin overrides, la barra de refinamiento parsea la query.
+type SearchOverrides = {
+  forceDemo?: boolean
+  request?: SearchRequest
+  objective?: SearchRequest["objective"]
+  budget?: SearchRequest["budget"]
 }
 
 export function AtlasShell() {
@@ -192,9 +204,9 @@ export function AtlasShell() {
     response,
     results,
     demoMode,
-    selectedCityId,
-    lastCityId,
-    hoveredCityId,
+    selectedId,
+    lastId,
+    hoveredId,
     layers,
     timeRange,
   } = state
@@ -235,7 +247,8 @@ export function AtlasShell() {
   const timeRangeRef = useRef(timeRange)
   const demoModeRef = useRef(demoMode)
   const resultsRef = useRef(results)
-  const selectedIdRef = useRef(selectedCityId)
+  const selectedIdRef = useRef(selectedId)
+  const searchRequestRef = useRef(searchRequest)
   const ingestUrlRef = useRef(ingest.url)
   // Disparador de la selección (§12): al cerrar el panel, el foco vuelve acá.
   const triggerRef = useRef<HTMLElement | SVGElement | null>(null)
@@ -245,15 +258,22 @@ export function AtlasShell() {
     timeRangeRef.current = timeRange
     demoModeRef.current = demoMode
     resultsRef.current = results
-    selectedIdRef.current = selectedCityId
+    selectedIdRef.current = selectedId
+    searchRequestRef.current = searchRequest
     ingestUrlRef.current = ingest.url
-  }, [view, layers, timeRange, demoMode, results, selectedCityId, ingest.url])
+  }, [view, layers, timeRange, demoMode, results, selectedId, searchRequest, ingest.url])
 
   const runSearch = useCallback(
-    (query: string, forceDemo = false) => {
+    (query: string, overrides: SearchOverrides = {}) => {
       if (viewRef.current === "analyzing") return
       const seq = ++searchSeq.current
-      const builtRequest = buildSearchRequest(query, layersRef.current, timeRangeRef.current)
+      const builtRequest: SearchRequest = overrides.request ?? {
+        query,
+        objective: overrides.objective ?? detectObjective(query),
+        budget: overrides.budget ?? parseBudget(query),
+        timeRange: timeRangeRef.current,
+        layers: layersRef.current,
+      }
       dispatch({ type: "SEARCH_STARTED", query, request: builtRequest })
       setLayersOpen(false)
       // Banda de escaneo §5: 1.05s × 2 (el prototipo la retira a los 2200ms).
@@ -265,7 +285,7 @@ export function AtlasShell() {
       searchOpportunities(builtRequest, {
         stageMs: reducedMotion ? 60 : 460,
         tailMs: reducedMotion ? 0 : 180,
-        forceDemo: forceDemo || demoModeRef.current,
+        forceDemo: overrides.forceDemo || demoModeRef.current,
         onStage: (stageId) => {
           if (searchSeq.current === seq) dispatch({ type: "SEARCH_PROGRESSED", stage: stageId })
         },
@@ -273,7 +293,8 @@ export function AtlasShell() {
         .then((searchResponse) => {
           if (searchSeq.current !== seq) return
           dispatch({ type: "SEARCH_SUCCEEDED", response: searchResponse })
-          camera.flyTo(FRAME_RESULTS, 900)
+          // Encuadre dinámico: bounding box de los mercados que llegaron.
+          camera.flyTo(resultsFrame(projectResults(searchResponse.opportunities)), 900)
         })
         .catch((error: unknown) => {
           if (searchSeq.current !== seq) return
@@ -288,18 +309,26 @@ export function AtlasShell() {
     [reducedMotion, camera],
   )
 
+  const launchFromIntake = useCallback(
+    (payload: IntakePayload) => {
+      runSearch(payload.description, { objective: payload.objective, budget: payload.budget })
+    },
+    [runSearch],
+  )
+
   const retrySearch = useCallback(() => {
-    runSearch(activeQuery || DEMO_QUERY)
+    runSearch(activeQuery || DEMO_QUERY, { request: searchRequestRef.current ?? undefined })
   }, [runSearch, activeQuery])
 
   const usePreparedDemo = useCallback(() => {
     dispatch({ type: "DEMO_MODE_ENTERED" })
-    runSearch(activeQuery || DEMO_QUERY, true)
+    runSearch(activeQuery || DEMO_QUERY, { forceDemo: true, request: searchRequestRef.current ?? undefined })
   }, [runSearch, activeQuery])
 
   const selectCity = useCallback(
     (id: string) => {
-      if (!isDemoCityId(id)) return
+      const opportunity = resultsRef.current.find((item) => item.id === id)
+      if (!opportunity) return
       // Se captura el disparador solo al ABRIR el panel: los cambios ciudad→ciudad
       // (rail, swipe) no lo pisan — cerrar vuelve siempre al primer disparador.
       if (viewRef.current !== "selected" && viewRef.current !== "campaign") {
@@ -308,11 +337,8 @@ export function AtlasShell() {
           active instanceof HTMLElement || active instanceof SVGElement ? active : null
       }
       dispatch({ type: "OPPORTUNITY_SELECTED", id })
-      const opportunity = resultsRef.current.find((item) => item.id === id)
-      if (opportunity) {
-        const [x, y] = projectCity(opportunity.coordinates[0], opportunity.coordinates[1])
-        camera.flyTo(cityFrame(x, y, window.innerWidth, window.innerHeight), 820)
-      }
+      const [x, y] = projectCity(opportunity.coordinates[0], opportunity.coordinates[1])
+      camera.flyTo(cityFrame(x, y, window.innerWidth, window.innerHeight), 820)
     },
     [camera],
   )
@@ -321,9 +347,9 @@ export function AtlasShell() {
     const closedId = selectedIdRef.current
     dispatch({ type: "SELECTION_CLOSED" })
     // Cerrar vuelve al encuadre de resultados, no al mundo completo (§6).
-    camera.flyTo(FRAME_RESULTS, 780)
+    camera.flyTo(resultsFrame(projectResults(resultsRef.current)), 780)
     // Retorno de foco (§12): al disparador si sigue en el DOM; si no, al item
-    // del rail de esa ciudad (la alternativa navegable al SVG).
+    // del rail de ese mercado (la alternativa navegable al SVG).
     const trigger = triggerRef.current
     triggerRef.current = null
     requestAnimationFrame(() => {
@@ -417,7 +443,7 @@ export function AtlasShell() {
       const typing =
         active instanceof HTMLElement &&
         (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.isContentEditable)
-      if (event.key === "/" && !typing) {
+      if (event.key === "/" && !typing && viewRef.current !== "idle") {
         event.preventDefault()
         searchInputRef.current?.focus()
       }
@@ -439,7 +465,7 @@ export function AtlasShell() {
   )
 
   const resetZoom = useCallback(() => {
-    // Con el panel abierto, "Reset view" recupera el encuadre de la ciudad — no
+    // Con el panel abierto, "Reset view" recupera el encuadre del mercado — no
     // FRAME_IDLE (quirk del prototipo que dejaba el mundo entero detrás del panel).
     const currentView = viewRef.current
     if (currentView === "selected" || currentView === "campaign") {
@@ -451,16 +477,16 @@ export function AtlasShell() {
         return
       }
     }
-    camera.flyTo(currentView === "results" ? FRAME_RESULTS : FRAME_IDLE, 700)
+    camera.flyTo(
+      currentView === "results" ? resultsFrame(projectResults(resultsRef.current)) : FRAME_IDLE,
+      700,
+    )
   }, [camera])
 
-  const displayCityId = selectedCityId ?? lastCityId
-  const displayCity = displayCityId ? DEMO_CITIES[displayCityId] : null
-  const displayAtlasCity = displayCityId ? ATLAS_CITIES.find((city) => city.id === displayCityId) : null
-  const collabNote =
-    displayCity && displayAtlasCity
-      ? `${displayAtlasCity.companiesExploring} companies are exploring ${displayCity.name} for ${topicLabel(detectTopic(activeQuery))}.`
-      : null
+  const displayId = selectedId ?? lastId
+  const displayOpportunity = displayId
+    ? results.find((item) => item.id === displayId) ?? null
+    : null
 
   // El overlay refleja el stage real del request — sin timers propios (§5/§10).
   const stageIndex =
@@ -485,16 +511,21 @@ export function AtlasShell() {
     .map((layer) => ` layer-off-${layer}`)
     .join("")
   const zoomClasses = `${zoomBand.zoomed ? " zoomed" : ""}${zoomBand.zoomed2 ? " zoomed2" : ""}`
-  // Con un error la search queda compacta arriba: el banner vive debajo de ella.
-  const compact = view !== "idle" || request.status === "error"
+  const compact = view !== "idle"
   const shellClassName = `atlas state-${view}${compact ? " search-compact" : ""}${sheetTall ? " sheet-tall" : ""}${scanning ? " scanning" : ""}${zoomClasses}${layerOffClasses}`
+
+  const requestBanner = (
+    <RequestBanner request={request} onRetry={retrySearch} onUsePreparedDemo={usePreparedDemo} />
+  )
 
   return (
     <div className={shellClassName}>
-      {/* Orden del DOM = orden de tab (§12): search → layers → rail → marcadores
-          (dentro del mapa) → panel → CTA. El mapa va al fondo por z-index, no por
-          orden (todos los overlays tienen z-index explícito). */}
+      {/* Orden del DOM = orden de tab (§12): intake → search → layers → rail →
+          marcadores (dentro del mapa) → panel → CTA. El mapa va al fondo por
+          z-index, no por orden (todos los overlays tienen z-index explícito). */}
       <AtlasHeader view={view} onReset={resetDemo} />
+
+      <OnboardingIntake onLaunch={launchFromIntake} banner={view === "idle" ? requestBanner : null} />
 
       <SearchCommand
         value={searchText}
@@ -503,7 +534,7 @@ export function AtlasShell() {
         chips={chips}
         inputRef={searchInputRef}
       >
-        <RequestBanner request={request} onRetry={retrySearch} onUsePreparedDemo={usePreparedDemo} />
+        {view !== "idle" ? requestBanner : null}
       </SearchCommand>
 
       <LayerControls
@@ -515,14 +546,14 @@ export function AtlasShell() {
         onOpenChange={setLayersOpen}
       />
 
-      <ResultRail results={results} selectedCityId={selectedCityId} onSelect={selectCity} onHover={hoverCity} />
+      <ResultRail results={results} selectedCityId={selectedId} onSelect={selectCity} onHover={hoverCity} />
 
       <WorldMap
         camera={camera}
         view={view}
         results={results}
-        selectedCityId={selectedCityId}
-        hoveredCityId={hoveredCityId}
+        selectedId={selectedId}
+        hoveredId={hoveredId}
         timeRange={timeRange}
         onSelect={selectCity}
         onHover={hoverCity}
@@ -536,13 +567,11 @@ export function AtlasShell() {
       <AnalysisOverlay active={view === "analyzing"} stageIndex={stageIndex} />
 
       <OpportunityDrawer
-        city={displayCity}
-        cityId={displayCityId}
+        opportunity={displayOpportunity}
         open={view === "selected" || view === "campaign"}
         campaign={view === "campaign"}
         sheetTall={sheetTall}
         onToggleSheet={toggleSheet}
-        collabNote={collabNote}
         searchMeta={searchMeta}
         eventFeedDown={eventFeedDown}
         importSlot={
@@ -570,8 +599,6 @@ export function AtlasShell() {
           <RotateCcw size={13} strokeWidth={1.8} />
         </button>
       </div>
-
-      <p className="footnote">Prepared demo — signals simulated · dot density = matched signal volume</p>
 
       <div className={`toast${toast.visible ? " show" : ""}`} role="status">
         {toast.message}

@@ -1,8 +1,8 @@
 "use client"
 
 import { memo, useMemo, type CSSProperties } from "react"
-import { buildSignalClusters, type SignalCluster } from "@/lib/atlas/signal-layout"
-import { isDemoCityId } from "@/lib/demo/fixtures"
+import type { Opportunity } from "@/lib/api/types"
+import { buildAmbientClusters, buildResultClusters, type SignalCluster } from "@/lib/atlas/signal-layout"
 
 const ClusterGroup = memo(function ClusterGroup({
   cluster,
@@ -99,29 +99,54 @@ const ClusterGroup = memo(function ClusterGroup({
 
 export const SignalCloudLayer = memo(function SignalCloudLayer({
   view,
-  selectedCityId,
-  hintCityId,
+  results,
+  selectedId,
+  hintId,
   timeRange,
 }: {
   view: "idle" | "analyzing" | "results" | "selected" | "campaign"
-  selectedCityId: string | null
-  hintCityId: string | null
+  // Los clusters de resultados nacen de la respuesta del backend — cualquier
+  // ciudad del mundo. La textura ambiente es fija (estética del idle).
+  results: readonly Opportunity[]
+  selectedId: string | null
+  hintId: string | null
   timeRange: string
 }) {
-  const clusters = useMemo(() => buildSignalClusters(), [])
+  const ambient = useMemo(() => buildAmbientClusters(), [])
+  const resultClusters = useMemo(() => buildResultClusters(results), [results])
+  // Un hub ambiente pegado a un resultado se oculta: el cluster del resultado
+  // es la versión "real" de esa zona (evita doble densidad).
+  const visibleAmbient = useMemo(
+    () =>
+      ambient.filter((cluster) =>
+        resultClusters.every(
+          (result) => (result.x - cluster.x) ** 2 + (result.y - cluster.y) ** 2 > 400,
+        ),
+      ),
+    [ambient, resultClusters],
+  )
   const ranked = view !== "idle" && view !== "analyzing"
   // Durante el análisis las señales bajan a 0.42 (§5); la ventana 7D las deja en 0.7.
   const opacity = view === "analyzing" ? 0.42 : timeRange === "7d" ? 0.7 : 1
 
   return (
     <g className="signals" aria-hidden="true" pointerEvents="none" style={{ opacity }}>
-      {clusters.map((cluster) => (
+      {visibleAmbient.map((cluster) => (
         <ClusterGroup
           key={cluster.id}
           cluster={cluster}
-          selected={cluster.id === selectedCityId}
-          dim={ranked && cluster.big && !isDemoCityId(cluster.id)}
-          hint={cluster.id === hintCityId}
+          selected={false}
+          dim={ranked && cluster.big}
+          hint={false}
+        />
+      ))}
+      {resultClusters.map((cluster) => (
+        <ClusterGroup
+          key={cluster.id}
+          cluster={cluster}
+          selected={cluster.id === selectedId}
+          dim={false}
+          hint={cluster.id === hintId}
         />
       ))}
     </g>

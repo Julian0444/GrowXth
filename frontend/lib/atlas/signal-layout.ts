@@ -1,20 +1,39 @@
 import { geoMercator } from "d3-geo"
-import { ATLAS_CITIES, MINOR_CLUSTERS } from "@/lib/atlas-data"
+import type { Opportunity } from "@/lib/api/types"
 
 export const MAP_WIDTH = 980
 export const MAP_HEIGHT = 560
 export const PROJECTION_SCALE = 152
 export const PROJECTION_CENTER: [number, number] = [12, 20]
 
-// Peso relativo de cada cluster principal (valores del prototipo verificado).
-const CLUSTER_STRENGTH: Record<string, number> = {
-  sf: 1,
-  bangalore: 1,
-  saopaulo: 0.85,
-  buenosaires: 0.8,
-  berlin: 0.75,
-  cdmx: 0.7,
-}
+// Textura ambiente de "señales en vivo" (§3): hubs developer globales. Es SOLO
+// estética de fondo — los mercados rankeados llegan del backend con sus propias
+// coordenadas y generan sus clusters en buildResultClusters().
+const AMBIENT_HUBS: { lng: number; lat: number; weight: number; big?: boolean }[] = [
+  { lng: -122.42, lat: 37.77, weight: 1, big: true },
+  { lng: -99.13, lat: 19.43, weight: 0.7, big: true },
+  { lng: -58.38, lat: -34.6, weight: 0.8, big: true },
+  { lng: -46.63, lat: -23.55, weight: 0.85, big: true },
+  { lng: 13.4, lat: 52.52, weight: 0.75, big: true },
+  { lng: 77.59, lat: 12.97, weight: 1, big: true },
+  { lng: -74.0, lat: 40.71, weight: 0.5 },
+  { lng: -0.12, lat: 51.5, weight: 0.45 },
+  { lng: 139.69, lat: 35.68, weight: 0.4 },
+  { lng: 103.82, lat: 1.35, weight: 0.35 },
+  { lng: 2.35, lat: 48.85, weight: 0.3 },
+  { lng: 151.21, lat: -33.87, weight: 0.3 },
+  { lng: 3.37, lat: 6.52, weight: 0.25 },
+  { lng: 121.47, lat: 31.23, weight: 0.35 },
+  { lng: 55.27, lat: 25.2, weight: 0.25 },
+  { lng: -79.38, lat: 43.65, weight: 0.3 },
+  { lng: -122.33, lat: 47.6, weight: 0.3 },
+  { lng: -97.74, lat: 30.27, weight: 0.25 },
+  { lng: -74.07, lat: 4.71, weight: 0.2 },
+  { lng: 18.07, lat: 59.33, weight: 0.2 },
+  { lng: 126.98, lat: 37.57, weight: 0.3 },
+  { lng: 72.88, lat: 19.08, weight: 0.3 },
+  { lng: 28.05, lat: -26.2, weight: 0.2 },
+]
 
 export type SignalDot = {
   id: string
@@ -51,6 +70,17 @@ function mulberry32(seed: number) {
   }
 }
 
+// Semilla estable a partir del id del mercado (FNV-1a): el mismo resultado del
+// backend produce siempre la misma nube — sin hydration mismatch ni "saltos".
+function hashSeed(input: string): number {
+  let hash = 2166136261
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return hash >>> 0
+}
+
 function gaussian(rand: () => number) {
   let u = 0
   let v = 0
@@ -62,8 +92,8 @@ function gaussian(rand: () => number) {
 const round1 = (value: number) => Math.round(value * 10) / 10
 const round2 = (value: number) => Math.round(value * 100) / 100
 
-function buildCluster(id: string, x: number, y: number, strength: number, big: boolean): SignalCluster {
-  const rand = mulberry32(20260722 + x * 7 + y * 13)
+function buildCluster(id: string, x: number, y: number, strength: number, big: boolean, seed: number): SignalCluster {
+  const rand = mulberry32(seed)
   const shells: [SignalDot[], SignalDot[], SignalDot[]] = [[], [], []]
   const count = big ? Math.round(130 * strength) : Math.round(26 * strength)
   const spread = big ? 13 : 8
@@ -119,15 +149,47 @@ export function projectCity(lng: number, lat: number): [number, number] {
 }
 
 // Determinístico (RNG sembrado): idéntico en server y cliente, sin riesgo de hydration mismatch.
-export function buildSignalClusters(): SignalCluster[] {
-  const clusters: SignalCluster[] = []
-  for (const city of ATLAS_CITIES) {
-    const [x, y] = projectCity(city.lng, city.lat)
-    clusters.push(buildCluster(city.id, x, y, CLUSTER_STRENGTH[city.id] ?? 0.7, true))
-  }
-  MINOR_CLUSTERS.forEach((cluster, index) => {
-    const [x, y] = projectCity(cluster.lng, cluster.lat)
-    clusters.push(buildCluster(`m${index}`, x, y, 0.55 + (index % 4) * 0.12, false))
+export function buildAmbientClusters(): SignalCluster[] {
+  return AMBIENT_HUBS.map((hub, index) => {
+    const [x, y] = projectCity(hub.lng, hub.lat)
+    return buildCluster(`hub-${index}`, x, y, hub.big ? hub.weight : 0.55 + (index % 4) * 0.12, hub.big ?? false, 20260722 + Math.round(x * 7 + y * 13))
   })
-  return clusters
+}
+
+// Cluster real de señales alrededor de la coordenada exacta del signal.
+function clusterFromSignals(opportunity: Opportunity, x: number, y: number): SignalCluster {
+  const shells: [SignalDot[], SignalDot[], SignalDot[]] = [[], [], []]
+  const glyphs: SignalGlyph[] = []
+  for (const signal of opportunity.signals) {
+    const [sx, sy] = projectCity(signal.coordinates[0], signal.coordinates[1])
+    if (signal.type === "demand") {
+      const dist = Math.hypot(sx - x, sy - y) / 13
+      shells[dist < 0.45 ? 0 : dist < 1 ? 1 : 2].push({
+        id: signal.id,
+        x: round1(sx),
+        y: round1(sy),
+        r: round2(0.5 + signal.intensity * 0.9),
+        opacity: round2(Math.min(0.72, 0.15 + signal.intensity * 0.55)),
+        breathe: null,
+      })
+    } else if (signal.type === "event") {
+      glyphs.push({ id: signal.id, kind: "event", x: round1(sx), y: round1(sy) })
+    } else if (signal.type === "community") {
+      glyphs.push({ id: signal.id, kind: "community", x: round1(sx), y: round1(sy), r: round1(0.9 + signal.intensity * 0.7) })
+    } else {
+      glyphs.push({ id: signal.id, kind: "company", x: round1(sx), y: round1(sy) })
+    }
+  }
+  return { id: opportunity.id, x, y, big: true, shells, glyphs }
+}
+
+// Clusters de los mercados devueltos por el backend — cualquier ciudad del
+// mundo. Si el backend manda SignalPoints se usan sus coordenadas reales; si
+// no, se sintetiza una nube proporcional al score (placeholder visual).
+export function buildResultClusters(opportunities: readonly Opportunity[]): SignalCluster[] {
+  return opportunities.map((opportunity) => {
+    const [x, y] = projectCity(opportunity.coordinates[0], opportunity.coordinates[1])
+    if (opportunity.signals.length > 0) return clusterFromSignals(opportunity, x, y)
+    return buildCluster(opportunity.id, x, y, 0.6 + opportunity.score / 250, true, hashSeed(opportunity.id))
+  })
 }

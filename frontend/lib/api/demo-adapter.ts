@@ -3,9 +3,9 @@
 // atlas-client.ts hablará con POST /api/opportunities/search y devolverá el
 // MISMO tipo; los componentes no cambian.
 
-import { ATLAS_CITIES } from "@/lib/atlas-data"
 import { DEMO_CITIES, TOP3, type DemoCity, type DemoCityId } from "@/lib/demo/fixtures"
 import type {
+  CampaignRecommendation,
   DataCoverage,
   EventOpportunity,
   MarketComparison,
@@ -13,6 +13,7 @@ import type {
   ProductInterpretation,
   SearchRequest,
   SearchResponse,
+  SourceReference,
 } from "./types"
 
 // Etapas reales del request — el analysis overlay refleja estas etapas, nunca
@@ -72,14 +73,54 @@ function parseCost(label: string): { amount: number; currency: "USD" } | null {
   return match ? { amount: Number(match[1]), currency: "USD" } : null
 }
 
+const MONTH_NUM: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+}
+
+// Los fixtures traen la fecha como copy ("observed Jul 2026") — el contrato
+// exige ISO, así que acá se normaliza; el formateo vuelve a hacerse en la UI.
+function evidenceObservedAt(when: string): string {
+  const match = /observed (\w{3}) (\d{4})/.exec(when)
+  return match ? `${match[2]}-${MONTH_NUM[match[1]] ?? "07"}-01` : "2026-07-22"
+}
+
+function toEvidence(id: DemoCityId, city: DemoCity): SourceReference[] {
+  return city.evidence.map((item, index) => ({
+    id: `${id}-src-${index}`,
+    provider: item.provider,
+    title: item.title,
+    observedAt: evidenceObservedAt(item.when),
+    isEstimated: item.isEstimated,
+  }))
+}
+
+function toCampaign(city: DemoCity): CampaignRecommendation {
+  const campaign = city.campaign
+  return {
+    title: campaign.title,
+    subtitle: campaign.sub,
+    track: campaign.track,
+    prize: campaign.prize,
+    workshop: campaign.workshop,
+    budgetBreakdown: campaign.budget.map(([label, amount]) => ({ label, amount })),
+    organizerMessage: campaign.outreach,
+    funnel: campaign.funnel.map(([label, value]) => ({ label, value })),
+    costPerRetained: campaign.costPerRetained,
+    attributionCode: campaign.attributionCode,
+  }
+}
+
 function toEvent(id: DemoCityId, city: DemoCity): EventOpportunity {
+  const [organizer, venue] = city.event.meta.split("·").map((part) => part.trim())
   return {
     id: `${id}-event-0`,
     name: city.event.name,
     url: "", // evento del dataset preparado — sin página pública real
     startsAt: FIXTURE_EVENT_DATES[id],
     city: city.name,
-    organizer: city.event.meta.split("·")[0].trim(),
+    venue,
+    organizer,
     sponsors: [],
     registrationStatus: city.event.status,
     // Derivados del fixture (dataset demo etiquetado), no scoring en vivo:
@@ -97,13 +138,12 @@ function toEvent(id: DemoCityId, city: DemoCity): EventOpportunity {
 
 function toOpportunity(id: DemoCityId): Opportunity {
   const city = DEMO_CITIES[id]
-  const geo = ATLAS_CITIES.find((item) => item.id === id)
   return {
     id,
     rank: city.rank,
     city: city.name,
     country: city.country,
-    coordinates: geo ? [geo.lng, geo.lat] : [0, 0],
+    coordinates: city.coordinates,
     score: city.score,
     confidence: city.confidence,
     activationCostBand: COST_BAND[id],
@@ -113,13 +153,16 @@ function toOpportunity(id: DemoCityId): Opportunity {
       label: reason.label,
       explanation: reason.text,
       impact: reason.impact === "+" ? "positive" : "negative",
+      sourceLabel: reason.source,
       evidenceIds: (REASON_EVIDENCE[id][index] ?? []).map((evi) => `${id}-src-${evi}`),
     })),
     metrics: { ...city.metrics },
+    evidence: toEvidence(id, city),
     // La nube de señales §3 se genera determinística en signal-layout (IDs
     // estables); el backend real la enviará por acá.
     signals: [],
     events: [toEvent(id, city)],
+    campaign: toCampaign(city),
     comparison: {
       baselineCity: "San Francisco",
       baselineScore: city.comparison.baselineScore,
