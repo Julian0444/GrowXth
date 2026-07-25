@@ -70,10 +70,34 @@ function state(): ResearchGlobal {
   return globalResearch.__growxthResearch;
 }
 
+function configuredTeracRun(campaignId: string): TeracRun | null {
+  const configuredCampaignId = process.env.TERAC_CAMPAIGN_ID;
+  const projectId = process.env.TERAC_PROJECT_ID;
+  const opportunityId = process.env.TERAC_OPPORTUNITY_ID;
+  if (
+    !configuredCampaignId ||
+    configuredCampaignId !== campaignId ||
+    !projectId ||
+    !opportunityId
+  ) {
+    return null;
+  }
+  return {
+    projectId,
+    opportunityId,
+    status: 'active',
+    participantTarget: 12,
+    pricing: null,
+    submissionStats: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 export function ensureCampaign(draft: CampaignDraft): CampaignRecord {
   const existing = state().campaigns.get(draft.id);
   if (existing) {
     existing.draft = draft;
+    existing.terac ??= configuredTeracRun(draft.id);
     existing.updatedAt = new Date().toISOString();
     return existing;
   }
@@ -81,7 +105,7 @@ export function ensureCampaign(draft: CampaignDraft): CampaignRecord {
   const created: CampaignRecord = {
     draft,
     votes: [],
-    terac: null,
+    terac: configuredTeracRun(draft.id),
     launch: {
       state: 'draft',
       chatId: null,

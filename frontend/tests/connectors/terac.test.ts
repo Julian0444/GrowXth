@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { createTeracDraft } from '../../lib/server/connectors/terac.ts';
+import {
+  createTeracDraft,
+  launchTeracOpportunity,
+} from '../../lib/server/connectors/terac.ts';
 
 test('creates a Terac draft with the official v2 shape and never auto-launches it', async () => {
   const originalFetch = globalThis.fetch;
@@ -73,5 +76,58 @@ test('creates a Terac draft with the official v2 shape and never auto-launches i
     else process.env.TERAC_API_KEY = originalKey;
     if (originalProject == null) delete process.env.TERAC_PROJECT_ID;
     else process.env.TERAC_PROJECT_ID = originalProject;
+  }
+});
+
+test('launches a Terac draft with an explicit JSON body', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalKey = process.env.TERAC_API_KEY;
+  let launchRequest: { url: string; init?: RequestInit } | null = null;
+  process.env.TERAC_API_KEY = 'test-key';
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    launchRequest = { url: String(input), init };
+    return Response.json({
+      id: 'opportunity-1',
+      status: 'active',
+      project_id: 'project-1',
+      num_participants: 12,
+      pricing: {
+        cost_per_participant_cents: 450,
+        total_cost_cents: 5400,
+        currency: 'usd',
+      },
+      submission_stats: {
+        total: 0,
+        in_progress: 0,
+        awaiting_review: 0,
+        approved: 0,
+        rejected: 0,
+      },
+      updated_at: '2026-07-25T00:01:44Z',
+    });
+  }) as typeof fetch;
+
+  try {
+    const result = await launchTeracOpportunity({
+      projectId: 'project-1',
+      opportunityId: 'opportunity-1',
+      status: 'draft',
+      participantTarget: 12,
+      pricing: null,
+      submissionStats: null,
+      updatedAt: '2026-07-24T20:00:00Z',
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.run?.status, 'active');
+    assert.equal(
+      launchRequest?.url,
+      'https://terac.com/api/external/v2/opportunities/opportunity-1/launch',
+    );
+    assert.equal(launchRequest?.init?.method, 'POST');
+    assert.equal(launchRequest?.init?.body, '{}');
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalKey == null) delete process.env.TERAC_API_KEY;
+    else process.env.TERAC_API_KEY = originalKey;
   }
 });

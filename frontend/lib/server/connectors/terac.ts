@@ -197,7 +197,7 @@ export async function getTeracOpportunity(run: TeracRun): Promise<TeracActionRes
 export async function launchTeracOpportunity(run: TeracRun): Promise<TeracActionResult> {
   const result = await teracRequest(
     `/opportunities/${encodeURIComponent(run.opportunityId)}/launch`,
-    { method: 'POST' },
+    { method: 'POST', body: JSON.stringify({}) },
   );
   const next = toRun(result.body, run.projectId);
   return {

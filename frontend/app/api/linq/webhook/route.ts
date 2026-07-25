@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 
 import type { CampaignDraft, SearchRequest, SearchResponse } from '@/lib/contracts/growxth';
-import { linq, type LinqInboundMessage } from '@/lib/server/connectors/linq';
+import { linq, type LinqInboundMessage, type LinqLocation } from '@/lib/server/connectors/linq';
 import {
   createSharedSearch,
+  getChat,
   getChatByHandle,
   getLaunchByMessage,
   getLatestLaunchForChat,
@@ -62,6 +63,78 @@ function appUrl(): string {
 
 function locationIntent(text: string): boolean {
   return /\b(near me|nearby|closest|cerca|cercano|ubicaci[oó]n|location)\b/i.test(text);
+}
+
+// ---- Ubicación por POLLING ----
+// La documentación de Linq incluye location.sharing.*, pero la cuenta actual
+// no tiene habilitada esa capacidad. Como respaldo, tras pedir la ubicación
+// sondeamos GET /chats/{id}/location hasta ~2 min; al aparecer coordenadas se
+// dispara el mismo re-ranking que haría el evento.
+const activeLocationPolls = new Set<string>();
+const LOCATION_POLL_INTERVAL_MS = 5000;
+const LOCATION_POLL_MAX_TRIES = 24;
+
+function pickLocation(locations: LinqLocation[], handle: string): LinqLocation | null {
+  return locations.find((item) => item.handle === handle) ?? locations[0] ?? null;
+}
+
+async function rankWithLocation(
+  chatId: string,
+  handle: string,
+  location: LinqLocation,
+  eventId: string,
+): Promise<boolean> {
+  const session = getChat(chatId);
+  if (!session?.lastRequest) return false;
+  const locationRequest: SearchRequest = {
+    ...session.lastRequest,
+    location: {
+      lat: location.lat,
+      lng: location.lng,
+      source: 'linq',
+      locality: location.locality,
+      updatedAt: location.updatedAt,
+    },
+  };
+  const syntheticMessage: LinqInboundMessage = {
+    kind: 'message',
+    eventId,
+    messageId: eventId,
+    from: handle,
+    chatId,
+    text: session.lastRequest.product,
+    receivedAt: new Date().toISOString(),
+    service: session.service,
+    isGroup: session.isGroup,
+  };
+  await deliverSearch(syntheticMessage, locationRequest);
+  return true;
+}
+
+function startLocationPoll(chatId: string, handle: string, eventId: string): void {
+  if (activeLocationPolls.has(chatId)) return;
+  activeLocationPolls.add(chatId);
+  let tries = 0;
+  const tick = async (): Promise<void> => {
+    tries += 1;
+    try {
+      const result = await linq.getLocation(chatId);
+      const location = result.ok ? pickLocation(result.locations, handle) : null;
+      if (location) {
+        activeLocationPolls.delete(chatId);
+        await rankWithLocation(chatId, handle, location, `${eventId}-poll-${tries}`);
+        return;
+      }
+    } catch {
+      // Falla transitoria del GET: se reintenta hasta agotar los tries.
+    }
+    if (tries < LOCATION_POLL_MAX_TRIES) {
+      setTimeout(() => void tick(), LOCATION_POLL_INTERVAL_MS);
+    } else {
+      activeLocationPolls.delete(chatId);
+    }
+  };
+  setTimeout(() => void tick(), LOCATION_POLL_INTERVAL_MS);
 }
 
 function approvalIntent(text: string): 'approved' | 'rejected' | 'needs_evidence' | null {
@@ -157,6 +230,19 @@ async function handleMessage(event: LinqInboundMessage): Promise<NextResponse> {
       return NextResponse.json({ ok: true, handled: 'location_needs_query', sent });
     }
     setChatSearch(event.chatId, request, null);
+    // Si ya está compartiendo (Find My), respondemos al instante sin re-pedir.
+    const current = await linq.getLocation(event.chatId);
+    const already = current.ok ? pickLocation(current.locations, event.from) : null;
+    if (already) {
+      const ranked = await rankWithLocation(event.chatId, event.from, already, event.eventId);
+      if (ranked) {
+        return NextResponse.json({
+          ok: true,
+          handled: 'location_ranked',
+          locality: already.locality,
+        });
+      }
+    }
     const requested = await linq.requestLocation(event.chatId);
     const text = requested.ok
       ? 'Share your location in the iMessage prompt. I only use it to break close ranking ties and show distance; it never changes the market score.'
@@ -169,9 +255,12 @@ async function handleMessage(event: LinqInboundMessage): Promise<NextResponse> {
       replyToMessageId: event.messageId,
       idempotencyKey: `location-request-${event.eventId}`,
     });
+    // Si el webhook de location no está habilitado, el poll detecta el share.
+    if (requested.ok) startLocationPoll(event.chatId, event.from, event.eventId);
     return NextResponse.json({
       ok: requested.ok,
       handled: 'location_requested',
+      polling: requested.ok,
       requested,
       sent,
     });

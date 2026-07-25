@@ -71,3 +71,34 @@ test('Linq approval changes campaign state, not research counts', () => {
   assert.equal(result?.nTotal, 0);
   assert.equal(result?.nValid, 0);
 });
+
+test('reconnects a configured live Terac opportunity after a server restart', () => {
+  const campaignId = `camp-test-${crypto.randomUUID()}`;
+  const previousCampaign = process.env.TERAC_CAMPAIGN_ID;
+  const previousProject = process.env.TERAC_PROJECT_ID;
+  const previousOpportunity = process.env.TERAC_OPPORTUNITY_ID;
+  process.env.TERAC_CAMPAIGN_ID = campaignId;
+  process.env.TERAC_PROJECT_ID = 'project-live';
+  process.env.TERAC_OPPORTUNITY_ID = 'opportunity-live';
+
+  try {
+    ensureCampaign({
+      id: campaignId,
+      opportunityId: 'opp-4',
+      title: 'Persistent validation',
+      variantA: 'A',
+      variantB: 'B',
+    });
+    const result = getCampaignResults(campaignId);
+    assert.equal(result?.terac?.projectId, 'project-live');
+    assert.equal(result?.terac?.opportunityId, 'opportunity-live');
+    assert.equal(result?.terac?.status, 'active');
+  } finally {
+    if (previousCampaign == null) delete process.env.TERAC_CAMPAIGN_ID;
+    else process.env.TERAC_CAMPAIGN_ID = previousCampaign;
+    if (previousProject == null) delete process.env.TERAC_PROJECT_ID;
+    else process.env.TERAC_PROJECT_ID = previousProject;
+    if (previousOpportunity == null) delete process.env.TERAC_OPPORTUNITY_ID;
+    else process.env.TERAC_OPPORTUNITY_ID = previousOpportunity;
+  }
+});
