@@ -64,7 +64,11 @@ export async function searchOrFixture(
     }
 
     const audited = auditResponse(response);
-    cache.set(key, audited);
+    // Partial responses are intentionally short-lived: the worldwide pipeline
+    // may still be filling its per-source caches in the background. Keeping a
+    // degraded response for six hours prevented the automatic refresh from ever
+    // seeing the completed Trends/X results.
+    if (!audited.degraded) cache.set(key, audited);
     return audited;
   })();
   pending.set(key, work);

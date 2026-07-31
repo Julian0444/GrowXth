@@ -7,6 +7,7 @@ import {
   normalizeGoogleTrends,
   normalizeTweets,
   rankGlobalMarkets,
+  searchTermForRequest,
   type GlobalSignalBundle,
 } from '../../lib/server/pipeline/global-market-search.ts';
 import { resolveMarketCity } from '../../lib/server/markets/city-catalog.ts';
@@ -32,7 +33,7 @@ test('normalizes worldwide Trends rows and explicit X locations', () => {
   const trends = normalizeGoogleTrends(
     actor([
       {
-        interestBy: [
+        geoData: [
           { geoCode: 'IN', geoName: 'India', value: [96] },
           { geoCode: 'GB', geoName: 'United Kingdom', value: [82] },
         ],
@@ -58,6 +59,41 @@ test('normalizes worldwide Trends rows and explicit X locations', () => {
   );
   assert.equal(tweets[0]?.city.city, 'London');
   assert.equal(tweets[0]?.engagement, 8);
+
+  const profiles = normalizeTweets(
+    actor([
+      {
+        url: 'https://x.com/OpenObserve',
+        username: 'OpenObserve',
+        name: 'OpenObserve',
+        location: 'San Francisco',
+        followers: 1200,
+        scrapedAt: '2026-07-24T00:00:00Z',
+      },
+    ]),
+    '2026-07-24T00:00:00Z',
+  );
+  assert.equal(profiles[0]?.city.city, 'San Francisco');
+  assert.equal(profiles[0]?.engagement, 1200);
+  assert.equal(profiles[0]?.kind, 'profile');
+});
+
+test('builds focused signal queries from natural product descriptions', () => {
+  assert.equal(
+    searchTermForRequest({
+      ...REQUEST,
+      product:
+        'We build AI agent observability for Python teams and want developer adoption',
+    }),
+    'ai observability',
+  );
+  assert.equal(
+    searchTermForRequest({
+      ...REQUEST,
+      product: 'Want a startup that focuses on replacing the current focus',
+    }),
+    'developer tools',
+  );
 });
 
 test('ranks three countries from query-specific geographic evidence', () => {
@@ -130,4 +166,3 @@ test('keeps a labeled worldwide fallback when every live source is unavailable',
   assert.ok(response.opportunities.every((item) => item.status === 'prepared'));
   assert.ok(Object.values(response.evidence).every((item) => item.status === 'prepared'));
 });
-

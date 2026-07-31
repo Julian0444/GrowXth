@@ -82,10 +82,10 @@ test('creates a Terac draft with the official v2 shape and never auto-launches i
 test('launches a Terac draft with an explicit JSON body', async () => {
   const originalFetch = globalThis.fetch;
   const originalKey = process.env.TERAC_API_KEY;
-  let launchRequest: { url: string; init?: RequestInit } | null = null;
+  const launchRequests: Array<{ url: string; init?: RequestInit }> = [];
   process.env.TERAC_API_KEY = 'test-key';
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
-    launchRequest = { url: String(input), init };
+    launchRequests.push({ url: String(input), init });
     return Response.json({
       id: 'opportunity-1',
       status: 'active',
@@ -119,6 +119,7 @@ test('launches a Terac draft with an explicit JSON body', async () => {
     });
     assert.equal(result.ok, true);
     assert.equal(result.run?.status, 'active');
+    const launchRequest = launchRequests[0];
     assert.equal(
       launchRequest?.url,
       'https://terac.com/api/external/v2/opportunities/opportunity-1/launch',

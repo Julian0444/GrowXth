@@ -71,6 +71,21 @@ async function abortRun(runId: string, token: string): Promise<void> {
   }).catch(() => null);
 }
 
+async function readDatasetItems(runId: string, token: string): Promise<unknown[]> {
+  const datasetResponse = await fetch(
+    `${APIFY_BASE}/actor-runs/${encodeURIComponent(runId)}/dataset/items?clean=true`,
+    {
+      headers: authHeaders(token),
+      signal: AbortSignal.timeout(8000),
+    },
+  );
+  if (!datasetResponse.ok) {
+    throw new Error(`Could not read Apify dataset (${datasetResponse.status}).`);
+  }
+  const items: unknown = await datasetResponse.json();
+  return Array.isArray(items) ? items : [];
+}
+
 export async function runApifyActor(
   actorId: string,
   input: unknown,
@@ -130,11 +145,12 @@ export async function runApifyActor(
     run = await readData(waited);
   } catch (error) {
     await abortRun(run.id, token);
+    const items = await readDatasetItems(run.id, token).catch(() => []);
     return {
       actorId,
       runId: run.id,
       status: 'TIMED-OUT',
-      items: [],
+      items,
       warning: error instanceof Error ? error.message : 'Apify Actor timed out.',
     };
   }
@@ -144,13 +160,14 @@ export async function runApifyActor(
     if (!terminal) {
       await abortRun(run.id, token);
     }
+    const items = await readDatasetItems(run.id, token).catch(() => []);
     return {
       actorId,
       runId: run.id,
       status: terminal
         ? (run.status as ActorTerminalStatus)
         : 'TIMED-OUT',
-      items: [],
+      items,
       warning:
         run.statusMessage ??
         (terminal
@@ -160,22 +177,12 @@ export async function runApifyActor(
   }
 
   try {
-    const datasetResponse = await fetch(
-      `${APIFY_BASE}/actor-runs/${encodeURIComponent(run.id)}/dataset/items?clean=true`,
-      {
-        headers: authHeaders(token),
-        signal: AbortSignal.timeout(8000),
-      },
-    );
-    if (!datasetResponse.ok) {
-      throw new Error(`Could not read Apify dataset (${datasetResponse.status}).`);
-    }
-    const items: unknown = await datasetResponse.json();
+    const items = await readDatasetItems(run.id, token);
     return {
       actorId,
       runId: run.id,
       status: 'SUCCEEDED',
-      items: Array.isArray(items) ? items : [],
+      items,
       warning: null,
     };
   } catch (error) {

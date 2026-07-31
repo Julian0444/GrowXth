@@ -63,3 +63,45 @@ test('degrades without exposing or requiring a token', async () => {
   }
 });
 
+test('keeps partial dataset items when an Actor exceeds its wait budget', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalToken = process.env.APIFY_TOKEN;
+  process.env.APIFY_TOKEN = 'test-apify-token';
+
+  globalThis.fetch = (async (
+    input: string | URL | Request,
+  ): Promise<Response> => {
+    const url = String(input);
+    if (url.includes('/runs?')) {
+      return Response.json({
+        data: { id: 'run-partial', status: 'READY', defaultDatasetId: 'dataset-partial' },
+      });
+    }
+    if (url.includes('/actor-runs/run-partial?')) {
+      return Response.json({
+        data: { id: 'run-partial', status: 'RUNNING', defaultDatasetId: 'dataset-partial' },
+      });
+    }
+    if (url.endsWith('/abort')) {
+      return Response.json({ data: { id: 'run-partial', status: 'ABORTED' } });
+    }
+    if (url.includes('/dataset/items')) {
+      return Response.json([{ id: 'partial-item' }]);
+    }
+    return Response.json({ error: { message: 'unexpected request' } }, { status: 500 });
+  }) as typeof fetch;
+
+  try {
+    const result = await runApifyActor(
+      'example/slow-actor',
+      {},
+      { waitSeconds: 1 },
+    );
+    assert.equal(result.status, 'TIMED-OUT');
+    assert.deepEqual(result.items, [{ id: 'partial-item' }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (originalToken == null) delete process.env.APIFY_TOKEN;
+    else process.env.APIFY_TOKEN = originalToken;
+  }
+});

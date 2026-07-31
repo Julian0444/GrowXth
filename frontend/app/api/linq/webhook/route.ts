@@ -13,6 +13,7 @@ import {
   setChatSearch,
   updateLaunch,
 } from '@/lib/server/connectors/linq-session-store';
+import { resolvePublicAppUrl } from '@/lib/server/env';
 import { formatSmsReply } from '@/lib/server/format/sms-reply';
 import { searchOrFixture } from '@/lib/server/pipeline/resolve';
 import {
@@ -55,10 +56,6 @@ function parseSearchRequest(text: string): SearchRequest {
         ? 'feedback'
         : 'adoption';
   return { product: text.trim(), icpStack, budgetUsd: 0, goal };
-}
-
-function appUrl(): string {
-  return (process.env.APP_URL ?? '').replace(/\/+$/, '');
 }
 
 function locationIntent(text: string): boolean {
@@ -172,7 +169,8 @@ async function deliverSearch(
   registerTopCampaign(response);
   const shared = createSharedSearch(response, response.opportunities[0]?.id ?? null);
   const reply = formatSmsReply(response, {
-    baseUrl: appUrl(),
+    baseUrl: resolvePublicAppUrl(),
+    request,
     shareId: shared.id,
   });
   const sent = await linq.sendMessage({

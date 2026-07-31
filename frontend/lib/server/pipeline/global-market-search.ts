@@ -14,6 +14,7 @@ import type {
   ThemeBreakdown,
 } from '../../contracts/growxth.ts';
 import { runApifyActor, type ApifyActorResult } from '../connectors/apify.ts';
+import { SIX_HOURS_MS, TtlCache } from '../cache.ts';
 import { distanceMiles, requestCapabilities } from '../graph/derive-signals.ts';
 import {
   MARKET_CITIES,
@@ -23,15 +24,25 @@ import {
 } from '../markets/city-catalog.ts';
 import { clamp01 } from '../scoring/score-utils.ts';
 
-const GOOGLE_TRENDS_ACTOR = 'apify/google-trends-scraper';
-const GITHUB_ACTOR = 'automation-lab/github-scraper';
-const X_ACTOR = 'apidojo/tweet-scraper';
+// The official Trends Actor is browser-heavy and repeatedly exceeded the live
+// request budget. This Actor uses Google's HTTP endpoints and returns the same
+// worldwide geo data without keeping the UI request open.
+const GOOGLE_TRENDS_ACTOR = 'agenscrape/google-trends-scraper';
+// apidojo/tweet-scraper disables API calls on Apify's free plan. The profile
+// mode of this Actor works through the API without X cookies, so we use it to
+// locate public X profiles that share handles with relevant GitHub owners.
+const X_ACTOR = 'automation-lab/twitter-scraper';
+const LIVE_SIGNAL_WAIT_MS = 4_500;
 
 const STOP_WORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'build', 'building', 'by', 'company',
   'developers', 'developer', 'for', 'from', 'in', 'is', 'it', 'of', 'on', 'our',
   'platform', 'product', 'software', 'that', 'the', 'their', 'to', 'tool', 'tools',
-  'we', 'with', 'una', 'para', 'por', 'que', 'los', 'las', 'del', 'de', 'un', 'y',
+  'we', 'with', 'want', 'wants', 'wanted', 'wanting', 'startup', 'startups',
+  'focus', 'focuses', 'focused', 'focusing', 'replace', 'replaces', 'replacing',
+  'user', 'users', 'team', 'teams', 'need', 'needs', 'help', 'helps', 'using',
+  'use', 'current', 'goal', 'goals', 'adoption', 'feedback', 'hiring', 'awareness',
+  'una', 'para', 'por', 'que', 'los', 'las', 'del', 'de', 'un', 'y',
 ]);
 
 interface TrendGeoSignal {
@@ -49,6 +60,7 @@ interface XGeoSignal {
   engagement: number;
   observedAt: string;
   basis: 'city' | 'profile_location';
+  kind?: 'post' | 'profile';
 }
 
 interface GithubGeoSignal {
@@ -64,6 +76,7 @@ interface GithubGeoSignal {
 interface SourceState {
   source: 'google_trends' | 'github' | 'x';
   available: boolean;
+  warming?: boolean;
   warning: string | null;
   globalCount: number;
   globalEvidenceUrl: string | null;
@@ -85,6 +98,31 @@ interface CityAccumulator {
   github: GithubGeoSignal[];
   prepared: boolean;
 }
+
+interface TrendsCollection {
+  result: ApifyActorResult;
+  signals: TrendGeoSignal[];
+}
+
+interface GithubCollection {
+  locations: GithubGeoSignal[];
+  repos: GithubRepo[];
+  repoCount: number;
+  evidenceUrl: string | null;
+  warning: string | null;
+}
+
+interface XCollection {
+  result: ApifyActorResult;
+  signals: XGeoSignal[];
+}
+
+const trendsCache = new TtlCache<TrendsCollection>(SIX_HOURS_MS);
+const githubCache = new TtlCache<GithubCollection>(SIX_HOURS_MS);
+const xCache = new TtlCache<XCollection>(SIX_HOURS_MS);
+const pendingTrends = new Map<string, Promise<TrendsCollection>>();
+const pendingGithub = new Map<string, Promise<GithubCollection>>();
+const pendingX = new Map<string, Promise<XCollection>>();
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null
@@ -123,9 +161,35 @@ export function searchTermForRequest(request: SearchRequest): string {
     .toLowerCase()
     .match(/[a-z0-9+#.-]+/g)
     ?.filter((token) => token.length > 1 && !STOP_WORDS.has(token)) ?? [];
-  const unique = [...new Set(tokens)].slice(0, 5);
+  const tokenSet = new Set(tokens);
+  if (
+    tokenSet.has('ai') &&
+    (tokenSet.has('observability') ||
+      tokenSet.has('monitoring') ||
+      tokenSet.has('telemetry'))
+  ) {
+    return `ai ${
+      tokenSet.has('observability')
+        ? 'observability'
+        : tokenSet.has('monitoring')
+          ? 'monitoring'
+          : 'telemetry'
+    }`;
+  }
+  const unique: string[] = [];
+  const stems = new Set<string>();
+  for (const token of tokens) {
+    const stem = token.length > 4 ? token.replace(/(ing|ers|ies|s)$/i, '') : token;
+    if (stems.has(stem)) continue;
+    stems.add(stem);
+    unique.push(token);
+    if (unique.length === 3) break;
+  }
   if (unique.length > 0) return unique.join(' ');
-  return requestCapabilities(request).slice(0, 3).join(' ') || 'developer tools';
+  const capabilities = requestCapabilities(request)
+    .filter((item) => item !== 'Founders')
+    .slice(0, 3);
+  return capabilities.join(' ') || 'developer tools';
 }
 
 function googleTrendsUrl(term: string): string {
@@ -141,6 +205,7 @@ function rowsFromTrendItem(
     { key: 'interestByMetro', basis: 'city' },
     { key: 'interestBySubregion', basis: 'city' },
     { key: 'interestBy', basis: 'country' },
+    { key: 'geoData', basis: 'country' },
   ];
   for (const group of groups) {
     const value = item[group.key];
@@ -211,6 +276,10 @@ function locationStrings(item: Record<string, unknown>): Array<{
   const author = asRecord(item.author);
   const authorLocation = author && asString(author.location);
   if (authorLocation) values.push({ value: authorLocation, basis: 'profile_location' });
+  const profileLocation = asString(item.location);
+  if (profileLocation) {
+    values.push({ value: profileLocation, basis: 'profile_location' });
+  }
   return values;
 }
 
@@ -233,14 +302,22 @@ export function normalizeTweets(
     normalized.push({
       city: match.city,
       url,
-      text: compact(asString(item.text) ?? 'Public X post about the searched topic.'),
+      text: compact(
+        asString(item.text) ??
+          asString(item.bio) ??
+          asString(item.name) ??
+          'Public X profile associated with a relevant repository owner.',
+      ),
       engagement:
         (asNumber(item.likeCount) ?? 0) +
         (asNumber(item.retweetCount) ?? 0) +
         (asNumber(item.replyCount) ?? 0) +
-        (asNumber(item.quoteCount) ?? 0),
-      observedAt: asString(item.createdAt) ?? collectedAt,
+        (asNumber(item.quoteCount) ?? 0) +
+        (asNumber(item.followers) ?? 0),
+      observedAt:
+        asString(item.createdAt) ?? asString(item.scrapedAt) ?? collectedAt,
       basis: match.basis,
+      kind: url.includes('/status/') ? 'post' : 'profile',
     });
   }
   return normalized;
@@ -258,18 +335,26 @@ function normalizeGithubRepos(items: unknown[], collectedAt: string): GithubRepo
   return items.flatMap((raw) => {
     const item = asRecord(raw);
     if (!item) return [];
-    const fullName = asString(item.fullName) ?? asString(item.name);
+    const ownerRecord = asRecord(item.owner);
+    const fullName =
+      asString(item.fullName) ?? asString(item.full_name) ?? asString(item.name);
     const owner =
       asString(item.owner) ??
+      (ownerRecord && asString(ownerRecord.login)) ??
       (fullName?.includes('/') ? fullName.split('/')[0] ?? null : null);
-    const url = asString(item.url) ?? asString(item.htmlUrl);
+    const url =
+      asString(item.htmlUrl) ?? asString(item.html_url) ?? asString(item.url);
     if (!fullName || !owner || !url) return [];
     return [{
       owner,
       name: fullName,
       url,
-      stars: Math.max(0, asNumber(item.stars) ?? 0),
-      updatedAt: asString(item.updatedAt) ?? collectedAt,
+      stars: Math.max(
+        0,
+        asNumber(item.stars) ?? asNumber(item.stargazers_count) ?? 0,
+      ),
+      updatedAt:
+        asString(item.updatedAt) ?? asString(item.updated_at) ?? collectedAt,
     }];
   });
 }
@@ -285,7 +370,10 @@ function normalizeGithubLocations(
     const username = asString(item.username) ?? asString(item.login);
     const location = asString(item.location);
     const profileUrl =
-      asString(item.url) ?? (username ? `https://github.com/${encodeURIComponent(username)}` : null);
+      asString(item.htmlUrl) ??
+      asString(item.html_url) ??
+      asString(item.url) ??
+      (username ? `https://github.com/${encodeURIComponent(username)}` : null);
     const city = location ? resolveMarketCity(location) : null;
     const repo = username ? repoByOwner.get(username.toLowerCase()) : null;
     if (!username || !profileUrl || !location || !city || !repo) return [];
@@ -301,76 +389,233 @@ function normalizeGithubLocations(
   });
 }
 
-async function collectGithub(term: string, collectedAt: string): Promise<{
-  result: ApifyActorResult;
-  locations: GithubGeoSignal[];
-  repoCount: number;
-  evidenceUrl: string | null;
-}> {
-  const result = await runApifyActor(
-    GITHUB_ACTOR,
-    { mode: 'search', searchQuery: term, maxResults: 10 },
-    { waitSeconds: 18, timeoutSeconds: 45, maxItems: 10, maxTotalChargeUsd: 0.035 },
-  );
-  const repos = normalizeGithubRepos(result.items, collectedAt);
-  if (repos.length === 0) {
-    return { result, locations: [], repoCount: 0, evidenceUrl: null };
-  }
+function githubHeaders(): HeadersInit {
+  const headers: Record<string, string> = {
+    accept: 'application/vnd.github+json',
+    'user-agent': 'GrowXth-Hackathon',
+    'x-github-api-version': '2022-11-28',
+  };
+  const token = process.env.GITHUB_TOKEN?.trim();
+  if (token) headers.authorization = `Bearer ${token}`;
+  return headers;
+}
 
-  const urls = [...new Set(repos.map((repo) => `https://github.com/${repo.owner}`))].slice(0, 8);
-  const profiles = await runApifyActor(
-    GITHUB_ACTOR,
-    { mode: 'profiles', urls, maxResults: urls.length },
+async function githubJson(url: string, timeoutMs: number): Promise<unknown> {
+  const response = await fetch(url, {
+    headers: githubHeaders(),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) {
+    throw new Error(`GitHub API returned ${response.status}.`);
+  }
+  return response.json();
+}
+
+async function collectGithub(
+  term: string,
+  collectedAt: string,
+): Promise<GithubCollection> {
+  try {
+    const query = new URLSearchParams({
+      q: term,
+      sort: 'stars',
+      order: 'desc',
+      per_page: '8',
+    });
+    const rawSearch = asRecord(
+      await githubJson(
+        `https://api.github.com/search/repositories?${query.toString()}`,
+        4_000,
+      ),
+    );
+    const repos = normalizeGithubRepos(
+      Array.isArray(rawSearch?.items) ? rawSearch.items : [],
+      collectedAt,
+    );
+    if (repos.length === 0) {
+      return {
+        locations: [],
+        repos: [],
+        repoCount: 0,
+        evidenceUrl: null,
+        warning: 'GitHub returned no relevant public repositories for this phrase.',
+      };
+    }
+
+    const owners = [...new Set(repos.map((repo) => repo.owner))].slice(0, 8);
+    const profiles = await Promise.all(
+      owners.map((owner) =>
+        githubJson(
+          `https://api.github.com/users/${encodeURIComponent(owner)}`,
+          3_000,
+        ).catch(() => null),
+      ),
+    );
+    return {
+      locations: normalizeGithubLocations(profiles, repos),
+      repos,
+      repoCount: repos.length,
+      evidenceUrl: repos[0]?.url ?? null,
+      warning: null,
+    };
+  } catch (error) {
+    return {
+      locations: [],
+      repos: [],
+      repoCount: 0,
+      evidenceUrl: null,
+      warning:
+        error instanceof Error
+          ? error.message
+          : 'GitHub could not be reached for this search.',
+    };
+  }
+}
+
+function unavailableActor(actorId: string, warning: string): ApifyActorResult {
+  return {
+    actorId,
+    runId: null,
+    status: 'UNAVAILABLE',
+    items: [],
+    warning,
+  };
+}
+
+async function collectTrends(
+  term: string,
+): Promise<TrendsCollection> {
+  const result = await runApifyActor(
+    GOOGLE_TRENDS_ACTOR,
     {
-      waitSeconds: 10,
-      timeoutSeconds: 30,
-      maxItems: urls.length,
-      maxTotalChargeUsd: 0.02,
+      keywords: [term],
+      geo: '',
+      timeRange: 'today 3-m',
+      category: 0,
+      includeRelatedSearches: false,
+      includeRelatedTopics: false,
+      includeGeoData: true,
+      includeInterestOverTime: false,
+      useBrowserForTopics: false,
+    },
+    {
+      waitSeconds: 55,
+      timeoutSeconds: 60,
+      memoryMb: 256,
+      maxItems: 1,
+      maxTotalChargeUsd: 0.03,
     },
   );
-  return {
-    result:
-      profiles.status === 'SUCCEEDED'
-        ? result
-        : { ...result, warning: profiles.warning ?? result.warning },
-    locations: normalizeGithubLocations(profiles.items, repos),
-    repoCount: repos.length,
-    evidenceUrl: repos[0]?.url ?? null,
-  };
+  return { result, signals: normalizeGoogleTrends(result, term) };
+}
+
+async function collectXProfiles(
+  owners: string[],
+  collectedAt: string,
+): Promise<XCollection> {
+  // Four query-specific profiles keep the Actor comfortably inside its
+  // background budget while still giving us a useful independent geo signal.
+  const usernames = [...new Set(owners)].slice(0, 4);
+  if (usernames.length === 0) {
+    return {
+      result: unavailableActor(
+        X_ACTOR,
+        'No relevant GitHub owner handles were available for X enrichment.',
+      ),
+      signals: [],
+    };
+  }
+  const result = await runApifyActor(
+    X_ACTOR,
+    {
+      mode: 'profiles',
+      usernames,
+      maxResults: usernames.length,
+    },
+    {
+      waitSeconds: 40,
+      timeoutSeconds: 45,
+      memoryMb: 256,
+      maxItems: usernames.length,
+      maxTotalChargeUsd: 0.03,
+    },
+  );
+  return { result, signals: normalizeTweets(result, collectedAt) };
+}
+
+function cachedOrStart<T>(
+  cache: TtlCache<T>,
+  pending: Map<string, Promise<T>>,
+  key: string,
+  work: () => Promise<T>,
+  shouldCache: (value: T) => boolean,
+): Promise<T> {
+  const cached = cache.get(key);
+  if (cached) return Promise.resolve(cached);
+  const current = pending.get(key);
+  if (current) return current;
+  const started = work()
+    .then((value) => {
+      if (shouldCache(value)) cache.set(key, value);
+      return value;
+    })
+    .finally(() => pending.delete(key));
+  pending.set(key, started);
+  return started;
+}
+
+async function settleWithin<T>(
+  promise: Promise<T>,
+  waitMs: number,
+): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), waitMs);
+    }),
+  ]);
 }
 
 export async function collectGlobalSignals(request: SearchRequest): Promise<GlobalSignalBundle> {
   const term = searchTermForRequest(request);
   const collectedAt = new Date().toISOString();
-  const xQuery = `${term} -filter:retweets`;
 
-  const [trendsResult, xResult, githubResult] = await Promise.all([
-    runApifyActor(
-      GOOGLE_TRENDS_ACTOR,
-      {
-        searchTerms: [term],
-        timeRange: 'today 3-m',
-        maxItems: 1,
-        skipDebugScreen: true,
-      },
-      { waitSeconds: 24, timeoutSeconds: 55, maxItems: 1, maxTotalChargeUsd: 0.03 },
-    ),
-    runApifyActor(
-      X_ACTOR,
-      {
-        searchTerms: [xQuery],
-        sort: 'Latest',
-        maxItems: 50,
-        includeSearchTerms: true,
-      },
-      { waitSeconds: 30, timeoutSeconds: 55, maxItems: 50, maxTotalChargeUsd: 0.03 },
-    ),
-    collectGithub(term, collectedAt),
+  const githubWork = cachedOrStart(
+    githubCache,
+    pendingGithub,
+    term,
+    () => collectGithub(term, collectedAt),
+    (value) => value.repoCount > 0,
+  );
+  const trendsWork = cachedOrStart(
+    trendsCache,
+    pendingTrends,
+    term,
+    () => collectTrends(term),
+    (value) => value.result.status === 'SUCCEEDED' || value.signals.length > 0,
+  );
+  const xWork = cachedOrStart(
+    xCache,
+    pendingX,
+    term,
+    async () => {
+      const github = await githubWork;
+      return collectXProfiles(
+        github.repos.map((repo) => repo.owner),
+        collectedAt,
+      );
+    },
+    (value) => value.result.status === 'SUCCEEDED' || value.signals.length > 0,
+  );
+
+  const [trendsResult, githubResult, xResult] = await Promise.all([
+    settleWithin(trendsWork, LIVE_SIGNAL_WAIT_MS),
+    settleWithin(githubWork, LIVE_SIGNAL_WAIT_MS),
+    settleWithin(xWork, LIVE_SIGNAL_WAIT_MS),
   ]);
-
-  const trends = normalizeGoogleTrends(trendsResult, term);
-  const tweets = normalizeTweets(xResult, collectedAt);
-  const github = githubResult.locations;
+  const trends = trendsResult?.signals ?? [];
+  const github = githubResult?.locations ?? [];
+  const tweets = xResult?.signals ?? [];
 
   return {
     term,
@@ -382,33 +627,38 @@ export async function collectGlobalSignals(request: SearchRequest): Promise<Glob
       {
         source: 'google_trends',
         available: trends.length > 0,
+        warming: trendsResult === null,
         warning:
-          trends.length > 0
+          trendsResult === null || trends.length > 0
             ? null
-            : trendsResult.warning ?? 'Google Trends returned no geographic rows.',
+            : 'No worldwide Google Trends geography was available for this phrase.',
         globalCount: trends.length,
         globalEvidenceUrl: trends.length > 0 ? googleTrendsUrl(term) : null,
       },
       {
         source: 'github',
-        available: githubResult.repoCount > 0,
+        available: (githubResult?.repoCount ?? 0) > 0,
+        warming: githubResult === null,
         warning:
-          githubResult.repoCount > 0
-            ? github.length > 0
-              ? null
-              : 'GitHub returned relevant repositories but no resolvable public owner locations.'
-            : githubResult.result.warning ?? 'GitHub returned no relevant repositories.',
-        globalCount: githubResult.repoCount,
-        globalEvidenceUrl: githubResult.evidenceUrl,
+          githubResult === null
+            ? null
+            : githubResult.repoCount === 0
+              ? githubResult.warning ??
+                'GitHub returned no relevant public repositories for this phrase.'
+              : github.length === 0
+                ? 'Relevant repositories were found, but their owners did not publish usable locations.'
+                : null,
+        globalCount: githubResult?.repoCount ?? 0,
+        globalEvidenceUrl: githubResult?.evidenceUrl ?? null,
       },
       {
         source: 'x',
         available: tweets.length > 0,
+        warming: xResult === null,
         warning:
-          tweets.length > 0
+          xResult === null || tweets.length > 0
             ? null
-            : xResult.warning ??
-              'The X Actor returned no posts with an explicit resolvable location.',
+            : 'No relevant public X profiles published a usable location.',
         globalCount: tweets.length,
         globalEvidenceUrl: tweets[0]?.url ?? null,
       },
@@ -656,7 +906,10 @@ export function rankGlobalMarkets(
         source: 'x',
         kind: 'social_post',
         url: item.url,
-        title: `Public X signal · ${city.city}`,
+        title:
+          item.kind === 'profile'
+            ? `Public X profile · ${city.city}`
+            : `Public X signal · ${city.city}`,
         observedAt: item.observedAt,
         location: city.city,
         confidence: item.basis === 'city' ? 0.8 : 0.55,
@@ -669,10 +922,18 @@ export function rankGlobalMarkets(
       return id;
     });
     if (tweetIds.length > 0) {
+      const profileCount = accumulator.tweets.filter(
+        (item) => item.kind === 'profile',
+      ).length;
       reasons.push({
-        text: `${accumulator.tweets.length} public X post${
-          accumulator.tweets.length === 1 ? '' : 's'
-        } about “${bundle.term}” include an explicit location matching ${city.city}.`,
+        text:
+          profileCount === accumulator.tweets.length
+            ? `${profileCount} public X profile${
+                profileCount === 1 ? '' : 's'
+              } associated with relevant repository handles list ${city.city}.`
+            : `${accumulator.tweets.length} public X signal${
+                accumulator.tweets.length === 1 ? '' : 's'
+              } include a location matching ${city.city}.`,
         evidenceIds: tweetIds,
       });
     }
@@ -875,12 +1136,52 @@ export function rankGlobalMarkets(
   const sourcesFailed = bundle.sources
     .filter((source) => !source.available)
     .map((source) => source.source as EvidenceSource);
-  const warnings = bundle.sources.flatMap((source) =>
-    source.warning ? [`${source.source}: ${source.warning}`] : [],
-  );
-  if (top.some((item) => item.status === 'prepared')) {
+  const warmingSources = bundle.sources.filter((source) => source.warming);
+  const sourceLabel = (source: EvidenceSource): string =>
+    source === 'google_trends'
+      ? 'Google Trends'
+      : source === 'github'
+        ? 'GitHub'
+        : source === 'x'
+          ? 'X'
+          : source;
+  const provisional = top.some((item) => item.status === 'prepared');
+  const warnings: string[] = [];
+  if (warmingSources.length > 0) {
+    const readyLabels = bundle.sources
+      .filter((source) => source.available)
+      .map((source) => sourceLabel(source.source));
+    const warmingLabels = warmingSources.map((source) =>
+      sourceLabel(source.source),
+    );
     warnings.push(
-      'Prepared developer hubs fill uncovered markets; they are labeled and never presented as observed demand.',
+      `Live ranking${
+        readyLabels.length > 0 ? ` from ${readyLabels.join(' and ')}` : ''
+      }; ${warmingLabels.join(
+        ' and ',
+      )} ${
+        warmingLabels.length === 1 ? 'is' : 'are'
+      } still loading and will refresh automatically.${
+        provisional ? ' Some markets are provisional for now.' : ''
+      }`,
+    );
+  } else if (sourcesFailed.length > 0) {
+    const failedLabels = bundle.sources
+      .filter((source) => !source.available)
+      .map((source) => sourceLabel(source.source));
+    warnings.push(
+      `Ranking uses ${
+        sourcesUsed.map((source) => sourceLabel(source)).join(' and ') ||
+        'provisional market coverage'
+      }; ${failedLabels.join(
+        ' and ',
+      )} did not return enough public location data for this query.${
+        provisional ? ' Some markets remain provisional.' : ''
+      }`,
+    );
+  } else if (provisional) {
+    warnings.push(
+      'Some markets remain provisional because live evidence does not yet cover three countries.',
     );
   }
   if (request.location) {
@@ -904,7 +1205,10 @@ export function rankGlobalMarkets(
     },
     warnings,
     generatedAt: bundle.collectedAt,
-    degraded: sourcesFailed.length > 0 || top.some((item) => item.status === 'prepared'),
+    degraded:
+      sourcesFailed.length > 0 ||
+      warmingSources.length > 0 ||
+      top.some((item) => item.status === 'prepared'),
     locationContext: request.location
       ? {
           source: request.location.source,

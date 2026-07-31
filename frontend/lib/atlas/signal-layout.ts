@@ -91,6 +91,7 @@ function gaussian(rand: () => number) {
 
 const round1 = (value: number) => Math.round(value * 10) / 10
 const round2 = (value: number) => Math.round(value * 100) / 100
+const round6 = (value: number) => Math.round(value * 1_000_000) / 1_000_000
 
 function buildCluster(id: string, x: number, y: number, strength: number, big: boolean, seed: number): SignalCluster {
   const rand = mulberry32(seed)
@@ -145,7 +146,12 @@ const projection = geoMercator()
   .translate([MAP_WIDTH / 2, MAP_HEIGHT / 2])
 
 export function projectCity(lng: number, lat: number): [number, number] {
-  return projection([lng, lat]) ?? [0, 0]
+  const point = projection([lng, lat])
+  if (!point) return [0, 0]
+  // V8 can serialize the last bit of d3's trigonometric projection slightly
+  // differently between server and browser. Six decimals is far below a
+  // visible SVG pixel and guarantees identical hydration attributes.
+  return [round6(point[0]), round6(point[1])]
 }
 
 // Determinístico (RNG sembrado): idéntico en server y cliente, sin riesgo de hydration mismatch.

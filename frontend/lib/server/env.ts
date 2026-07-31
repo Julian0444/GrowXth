@@ -9,7 +9,8 @@ interface EnvSpec {
 }
 
 const SPECS: EnvSpec[] = [
-  { name: 'APP_URL', purpose: 'base URL para links en mensajes y OG images' },
+  { name: 'APP_URL', purpose: 'base URL del webhook y tareas externas' },
+  { name: 'PUBLIC_APP_URL', purpose: 'URL pública sin interstitial para links enviados por Linq' },
   { name: 'LINQ_API_KEY', purpose: 'envío real de mensajes por Linq' },
   { name: 'LINQ_WEBHOOK_SECRET', purpose: 'verificación de firma del webhook de Linq', requiredInProd: true },
   { name: 'TERAC_API_KEY', purpose: 'borradores y resultados A/B de Terac' },
@@ -22,6 +23,17 @@ let alreadyChecked = false;
 export interface EnvReport {
   missing: string[];
   warnings: string[];
+}
+
+interface PublicUrlEnv {
+  PUBLIC_APP_URL?: string;
+  APP_URL?: string;
+}
+
+export function resolvePublicAppUrl(
+  env: PublicUrlEnv = process.env as PublicUrlEnv,
+): string {
+  return (env.PUBLIC_APP_URL ?? env.APP_URL ?? '').replace(/\/+$/, '');
 }
 
 export function checkEnv(): EnvReport {
